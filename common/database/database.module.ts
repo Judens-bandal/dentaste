@@ -4,6 +4,7 @@ import { DatabaseService } from './database.service';
 import { Module } from '@nestjs/common';
 import { configValidationSchema } from 'common/database/config.schema';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { User } from 'src/auth/common/entity/user';
 
 @Module({
   imports: [
@@ -16,7 +17,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
       inject: [ConfigService],
       name: 'main_repo',
       useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
+        type: 'mysql',
         autoLoadEntities: true,
         synchronize: false,
         host: configService.get<string>('DB_HOST'),
@@ -24,6 +25,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
         username: configService.get<string>('DB_USERNAME'),
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_DATABASE'),
+        entities: [User],
       }),
     }),
   ],
