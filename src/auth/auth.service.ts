@@ -1,5 +1,7 @@
 import {
   ConflictException,
+  HttpException,
+  HttpStatus,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -9,10 +11,16 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { JwtPayload } from './common/jwt-payload.interface';
 import { CreateUserDto, LoginUserDto } from './common/dto/user';
-import { ERole, ErrorCode } from 'utils/common.enum';
 
 import * as bcrypt from 'bcrypt';
-import { DEFAULT_ROLE_PERMISSIONS } from 'utils/role.permission.constant';
+
+import { ERole, ErrorCode } from '../../utils/common.enum';
+import {
+  EXP,
+  LOCKOUT_SECONDS,
+  MAX_FAILED_ATTEMPTS,
+} from '../../utils/common.constant';
+import { DEFAULT_ROLE_PERMISSIONS } from '../../utils/role.permission.constant';
 
 @Injectable()
 export class AuthService {
@@ -74,9 +82,122 @@ export class AuthService {
     // );
   }
 
+  //   async login(
+  //     authCredentialsDto: LoginUserDto,
+  //   ): Promise<{ accessToken: string }> {
+  //     const { username, password } = authCredentialsDto;
+
+  //     const user = await this.userRepository.findOne({
+  //       where: { username },
+  //     });
+
+  //     if (!user) {
+  //       throw new UnauthorizedException({
+  //         code: ErrorCode.INVALID_CREDENTIALS,
+  //       });
+  //     }
+
+  //     const isPasswordValid = await bcrypt.compare(password, user.password);
+
+  //     if (!isPasswordValid) {
+  //       throw new UnauthorizedException('Please check your valid credentials!');
+  //     }
+
+  //     const payload: JwtPayload = {
+  //       name: user.name,
+  //       username: user.username,
+  //       role: user.role,
+  //       id: user.id,
+  //       permissions: user.permissions,
+  //     };
+
+  //     const accessToken = this.jwtService.sign(payload, {
+  //       expiresIn: 86400, // 1 day, in seconds
+  //     });
+
+  //     // void this.notificationHelper.notifyAdmins(
+  //     //   EAdminNotification.USER_LOGIN,
+  //     //   `${user.name} logged in`,
+  //     //   { id: user.id },
+  //     // );
+
+  //     return { accessToken };
+  //   }
+
+  //   // getAllUsers(): Promise<User[]> {
+  //   //   return this.userRepository.find();
+  //   // }
+  // }
+
+  private loginAttempts = new Map<
+    string,
+    { count: number; expiresAt: number }
+  >();
+
+  private attemptsKey(username: string) {
+    return `login-attempts:${username}`;
+  }
+
+  private getAttempts(key: string): number {
+    const entry = this.loginAttempts.get(key);
+    if (!entry) return 0;
+    if (Date.now() > entry.expiresAt) {
+      this.loginAttempts.delete(key);
+      return 0;
+    }
+    return entry.count;
+  }
+
+  // Seconds left until the lockout clears — 0 if not locked / already expired.
+  private getRemainingLockoutSeconds(key: string): number {
+    const entry = this.loginAttempts.get(key);
+    if (!entry) return 0;
+    const remainingMs = entry.expiresAt - Date.now();
+    return remainingMs > 0 ? Math.ceil(remainingMs / 1000) : 0;
+  }
+
+  // 125 -> "2:05"
+  private formatMmSs(totalSeconds: number): string {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  }
+
+  private setAttempts(key: string, count: number) {
+    this.loginAttempts.set(key, {
+      count,
+      expiresAt: Date.now() + LOCKOUT_SECONDS * 1000,
+    });
+  }
+
+  private clearAttempts(key: string) {
+    this.loginAttempts.delete(key);
+  }
+
   async login(
     authCredentialsDto: LoginUserDto,
   ): Promise<{ accessToken: string }> {
+    const key = this.attemptsKey(authCredentialsDto.username);
+    // const attempts = (await this.redisCacheService.get<number>(key)) ?? 0;
+
+    const attempts = this.getAttempts(key);
+
+    if (attempts >= MAX_FAILED_ATTEMPTS) {
+      // const ttlMs = await this.redisCacheService.ttl(key); // ms remaining, if your client supports it
+      // const remainingSeconds = Math.ceil(ttlMs / 1000);
+      const remainingSeconds = this.getRemainingLockoutSeconds(key);
+
+      throw new HttpException(
+        {
+          code: ErrorCode.TOO_MANY_LOGIN_ATTEMPTS,
+          message: `Too many failed login attempts. Please wait ${this.formatMmSs(
+            remainingSeconds,
+          )} before trying again.`,
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
     const { username, password } = authCredentialsDto;
 
     const user = await this.userRepository.findOne({
@@ -84,6 +205,9 @@ export class AuthService {
     });
 
     if (!user) {
+      // await this.redisCacheService.set(key, attempts + 1, LOCKOUT_SECONDS);
+      this.setAttempts(key, attempts + 1);
+
       throw new UnauthorizedException({
         code: ErrorCode.INVALID_CREDENTIALS,
       });
@@ -92,8 +216,16 @@ export class AuthService {
     const isPasswordValid = await bcrypt.compare(password, user.password);
 
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Please check your valid credentials!');
+      // await this.redisCacheService.set(key, attempts + 1, LOCKOUT_SECONDS);
+      this.setAttempts(key, attempts + 1);
+
+      throw new UnauthorizedException({
+        code: ErrorCode.INVALID_CREDENTIALS,
+      });
     }
+
+    // await this.redisCacheService.del(key);
+    this.clearAttempts(key);
 
     const payload: JwtPayload = {
       name: user.name,
@@ -104,7 +236,7 @@ export class AuthService {
     };
 
     const accessToken = this.jwtService.sign(payload, {
-      expiresIn: 86400, // 1 day, in seconds
+      expiresIn: EXP, // 1 day, in seconds
     });
 
     // void this.notificationHelper.notifyAdmins(

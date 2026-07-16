@@ -38,23 +38,36 @@ export function transformDateToISOString({
   return `${year}-${month}-${day} ${hours}:${minutes}`;
 }
 
-export function extractUser(
-  req: ICustomRequest,
-  dto?: { id?: unknown } | null,
-) {
+// export function extractUser(req: ICustomRequest, dto?: { id?: string } | null) {
+//   const role = req?.claims?.role ?? req?.user?.role;
+//   const dtoId =
+//     dto && typeof dto === 'object' && 'id' in dto ? dto.id : undefined;
+//   const requestUserId = req?.claims?.id ?? req?.user?.id;
+//   const fallbackId = dtoId != null ? Number(dtoId) : requestUserId;
+
+//   if (role === ERole.ADMIN || role === ERole.DOCTOR) {
+//     return { role, id: fallbackId != null ? Number(fallbackId) : null };
+//   } else if (role === ERole.ASSISTANT) {
+//     return { role, id: requestUserId != null ? Number(requestUserId) : null };
+//   }
+
+//   return { role, id: requestUserId != null ? Number(requestUserId) : null };
+// }
+
+export function extractUser(req: ICustomRequest, dto?: { id?: string } | null) {
   const role = req?.claims?.role ?? req?.user?.role;
   const dtoId =
     dto && typeof dto === 'object' && 'id' in dto ? dto.id : undefined;
   const requestUserId = req?.claims?.id ?? req?.user?.id;
-  const fallbackId = dtoId != null ? Number(dtoId) : requestUserId;
+  const fallbackId = dtoId ?? requestUserId;
 
   if (role === ERole.ADMIN || role === ERole.DOCTOR) {
-    return { role, id: fallbackId != null ? Number(fallbackId) : null };
+    return { role, id: fallbackId ?? null };
   } else if (role === ERole.ASSISTANT) {
-    return { role, id: requestUserId != null ? Number(requestUserId) : null };
+    return { role, id: requestUserId ?? null };
   }
 
-  return { role, id: requestUserId != null ? Number(requestUserId) : null };
+  return { role, id: requestUserId ?? null };
 }
 
 export function expressResponse(res: Response, data: IResponse) {

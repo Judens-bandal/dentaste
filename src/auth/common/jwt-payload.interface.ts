@@ -1,4 +1,4 @@
-import { EPermissions, ERole } from 'utils/common.enum';
+import { EPermissions, ERole } from '../../../utils/common.enum';
 
 export interface JwtPayload {
   name: string;

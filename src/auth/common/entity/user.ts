@@ -8,8 +8,8 @@ import {
   Unique,
   UpdateDateColumn,
 } from 'typeorm';
-import { EPermissions, ERole } from 'utils/common.enum';
-import { transformDateToISOString } from 'utils/common.helper';
+import { EPermissions, ERole } from '../../../../utils/common.enum';
+import { transformDateToISOString } from '../../../../utils/common.helper';
 
 @Entity('users')
 @Unique(['username'])

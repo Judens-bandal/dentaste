@@ -1,0 +1,5 @@
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCKOUT_SECONDS = 2 * 60;
+export { MAX_FAILED_ATTEMPTS, LOCKOUT_SECONDS };
+
+export const EXP = 86400;

@@ -1,5 +1,6 @@
 import { Request } from 'express';
 import { EPermissions, ERole } from './common.enum';
+import { JwtPayload } from '../src/auth/common/jwt-payload.interface';
 
 export interface IClaims {
   id: number;
@@ -11,12 +12,17 @@ export interface IClaims {
   exp?: number;
 }
 
+// export interface ICustomRequest extends Request {
+//   claims?: IClaims;
+//   user?: {
+//     id?: string;
+//     role?: ERole;
+//   };
+// }
+
 export interface ICustomRequest extends Request {
   claims?: IClaims;
-  user?: {
-    id?: number;
-    role?: ERole;
-  };
+  user?: JwtPayload;
 }
 
 export interface INotification {

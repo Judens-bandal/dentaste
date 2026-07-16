@@ -51,6 +51,7 @@ export enum ErrorCode {
   // SERVER (500000)
   // ==============================
   INTERNAL_SERVER_ERROR = 500001,
+  TOO_MANY_LOGIN_ATTEMPTS = 50002,
 
   // ==============================
   // AUTHENTICATION (401000)
@@ -67,6 +68,8 @@ export enum ErrorCode {
   FORBIDDEN_PERMISSION = 403001,
   FORBIDDEN_ROLE = 403002,
 
+  TOO_MANY_REQUESTS = 400058,
+
   // ==============================
   // DTO (400999)
   // ==============================
@@ -78,12 +81,14 @@ export enum ErrorCode {
   INVALID_CREDENTIALS = 400001,
   USERNAME_ALREADY_EXIST = 400002,
   USER_NOT_FOUND = 400003,
+
   USER_CANNOT_DELETE_SELF = 400004,
 
   // ==============================
   // USER PERMISSION (400050)
   // ==============================
   PERMISSION_ALREADY_GRANTED = 400051,
+  NO_PERMISSION = 400054,
   PERMISSION_NOT_GRANTED = 400052,
   INVALID_PERMISSION_FOR_ROLE = 400053,
 

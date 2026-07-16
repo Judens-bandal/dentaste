@@ -1,5 +1,6 @@
 // src/common/constants/role-permissions.constant.ts
-import { EPermissions, ERole } from 'utils/common.enum';
+
+import { EPermissions, ERole } from './common.enum';
 
 export const DEFAULT_ROLE_PERMISSIONS: Record<ERole, EPermissions[]> = {
   [ERole.ADMIN]: Object.values(EPermissions), // full access

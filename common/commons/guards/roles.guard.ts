@@ -6,9 +6,10 @@ import {
 } from '@nestjs/common';
 
 import { Reflector } from '@nestjs/core';
-import { JwtPayload } from 'src/auth/common/jwt-payload.interface';
-import { ERole, ErrorCode } from 'utils/common.enum';
+
 import { ROLES_KEY } from '../decorator/roles.decorator';
+import { JwtPayload } from '../../../src/auth/common/jwt-payload.interface';
+import { ERole, ErrorCode } from '../../../utils/common.enum';
 
 interface AuthRoleRequest extends Request {
   user?: JwtPayload | { role?: ERole };

@@ -1,35 +1,91 @@
+// // src/database/database.module.ts
+// import { TypeOrmModule } from '@nestjs/typeorm';
+// import { DatabaseService } from './database.service';
+// import { Module } from '@nestjs/common';
+// import { ConfigModule, ConfigService } from '@nestjs/config';
+// import { configValidationSchema } from './config.schema';
+// import { User } from '../../src/auth/common/entity/user';
+
+// @Module({
+//   imports: [
+//     ConfigModule.forRoot({
+//       envFilePath: [`.env.stage.${process.env.STAGE}`],
+//       validationSchema: configValidationSchema,
+//     }),
+//     TypeOrmModule.forRootAsync({
+//       imports: [ConfigModule],
+//       inject: [ConfigService],
+//       name: 'main_repo',
+//       useFactory: (configService: ConfigService) => ({
+//         type: 'postgres',
+//         autoLoadEntities: true,
+//         synchronize: false,
+//         host: configService.get<string>('DB_HOST'),
+//         port: configService.get<number>('DB_PORT')!,
+//         username: configService.get<string>('DB_USERNAME'),
+//         password: configService.get<string>('DB_PASSWORD'),
+//         database: configService.get<string>('DB_DATABASE'),
+//         entities: [User],
+//       }),
+//     }),
+//   ],
+//   providers: [DatabaseService],
+//   exports: [DatabaseService],
+// })
+// export class DatabaseModule {}
+
 // src/database/database.module.ts
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { DatabaseService } from './database.service';
 import { Module } from '@nestjs/common';
-import { configValidationSchema } from 'common/database/config.schema';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { User } from 'src/auth/common/entity/user';
+import { DatabaseService } from './database.service';
+import { configValidationSchema } from './config.schema';
+
+// Import your entities here
+import { User } from '../../src/auth/common/entity/user';
+import { Patient } from '../../src/patient/entity/patient';
+import { Appointment } from '../../src/appointment/entity/appointment';
+import { Payment } from '../../src/payment/entity/payment';
+// Add more entities later: Patient, Appointment, Notification, etc.
 
 @Module({
   imports: [
     ConfigModule.forRoot({
-      envFilePath: [`.env.stage.${process.env.STAGE}`],
+      envFilePath: [`.env.stage.${process.env.STAGE || 'dev'}`],
       validationSchema: configValidationSchema,
     }),
+
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      name: 'main_repo',
+      name: 'main_repo', // Keep this if you want named connection
       useFactory: (configService: ConfigService) => ({
-        type: 'mysql',
+        type: 'postgres',
         autoLoadEntities: true,
-        synchronize: false,
+        synchronize: false, // Never true in production!
+        // logging: configService.get<string>('NODE_ENV') === 'development',
+
         host: configService.get<string>('DB_HOST'),
-        port: configService.get<number>('DB_PORT')!,
+        port: configService.get<number>('DB_PORT'),
         username: configService.get<string>('DB_USERNAME'),
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_DATABASE'),
-        entities: [User],
+        // url: configService.get<string>('DATABASE_URL'),
+
+        ssl: {
+          rejectUnauthorized: false, // Important for Supabase
+        },
+
+        // Extra options for better Supabase compatibility
+        extra: {
+          max: 20,
+        },
+
+        entities: [User, Patient, Appointment, Payment], // Add all your entities here
       }),
     }),
   ],
   providers: [DatabaseService],
-  exports: [DatabaseService],
+  exports: [TypeOrmModule, DatabaseService], // Export TypeOrmModule too
 })
 export class DatabaseModule {}
