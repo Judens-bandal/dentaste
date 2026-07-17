@@ -11,4 +11,8 @@ export const configValidationSchema = Joi.object({
   // DATABASE_URL: Joi.string().required(),
   //   ENCRYPTION_SECRET: Joi.string().required(),
   //   REDIS_URL: Joi.string().required(),
+  REDIS_HOST: Joi.string().required(),
+  REDIS_PORT: Joi.number().default(6379).required(),
+  REDIS_USERNAME: Joi.string().allow('').optional(),
+  REDIS_PASSWORD: Joi.string().allow('').optional(),
 });

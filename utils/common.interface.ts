@@ -1,13 +1,14 @@
 import { Request } from 'express';
 import { EPermissions, ERole } from './common.enum';
 import { JwtPayload } from '../src/auth/common/jwt-payload.interface';
+import { EPatientStatus } from '../src/patient/enum/enum';
 
 export interface IClaims {
-  id: number;
+  id: string;
   name: string;
   username: string;
   role: ERole;
-  claims: EPermissions[];
+  permissions: EPermissions[];
   iat?: number;
   exp?: number;
 }
@@ -44,3 +45,30 @@ export interface IResponse {
 //   created_by: number | string;
 //   creator_role: EAppRole;
 // }
+
+export interface IAppointments {
+  id: string;
+  patient: {
+    name: string;
+  };
+  branch: string;
+  scheduledAt: string;
+}
+
+export interface IPatient {
+  id?: string;
+
+  name: string;
+
+  address: string;
+
+  cellphoneNumber: string;
+
+  age: number;
+
+  occupation: string;
+
+  status: EPatientStatus;
+
+  // appointments: Appointment[];
+}

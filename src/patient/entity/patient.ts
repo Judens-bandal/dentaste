@@ -16,7 +16,7 @@ import { Appointment } from '../../appointment/entity/appointment';
 @Entity('patients')
 export class Patient {
   @PrimaryGeneratedColumn('uuid')
-  id?: string;
+  id: string;
 
   @Column({ type: 'varchar', length: 150 })
   name: string;

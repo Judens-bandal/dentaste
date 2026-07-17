@@ -6,7 +6,9 @@ import {
 import { classToPlain, TransformFnParams } from 'class-transformer';
 import { ICustomRequest, IResponse } from './common.interface.js';
 import { Response } from 'express';
-import { ERole } from './common.enum.js';
+import { ERole, ErrorCode } from './common.enum.js';
+import { BadRequestException } from '@nestjs/common';
+import { EBranch } from '../src/appointment/enum/appointment.js';
 
 export function transformDateToISOString({
   value,
@@ -261,4 +263,49 @@ export function compareStreamId(a: string, b: string): number {
 
   if (aMs !== bMs) return aMs - bMs;
   return (aSeq ?? 0) - (bSeq ?? 0);
+}
+
+export function isSecondWeekThursdayOrFriday(date: Date): boolean {
+  const dayOfMonth = date.getDate();
+  const dayOfWeek = date.getDay(); // Thu = 4, Fri = 5
+  return (
+    dayOfMonth >= 8 && dayOfMonth <= 14 && (dayOfWeek === 4 || dayOfWeek === 5)
+  );
+}
+
+/**
+ * Throws if someone tries to book a non-Calbayog branch on the
+ * 2nd Thursday/Friday of the month, when only Calbayog is available.
+ */
+export function assertBranchAllowedForDate(date: Date, branch: EBranch): void {
+  if (isSecondWeekThursdayOrFriday(date) && branch !== EBranch.CALBAYOG) {
+    throw new BadRequestException({
+      code: ErrorCode.BRANCH_NOT_ALLOWED_ON_DATE,
+      message:
+        'On the 2nd Thursday/Friday of the month, only Calbayog is available.',
+    });
+  }
+}
+
+export function formatDateTime(
+  date: Date | string,
+  timeZone = 'Asia/Manila',
+): string {
+  const d = typeof date === 'string' ? new Date(date) : date;
+
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).formatToParts(d);
+
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+
+  const period = get('dayPeriod').toLowerCase(); // "PM" -> "pm"
+
+  return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')} ${period}`;
 }

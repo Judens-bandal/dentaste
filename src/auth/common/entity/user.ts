@@ -1,4 +1,4 @@
-import { Transform } from 'class-transformer';
+import { Exclude, Transform } from 'class-transformer';
 import { IsEmail } from 'class-validator';
 import {
   Column,
@@ -22,6 +22,7 @@ export class User {
   username: string;
 
   @Column('varchar', { length: 100 })
+  @Exclude({ toPlainOnly: true })
   password: string;
 
   @Column('varchar', { length: 20 })

@@ -1,6 +1,20 @@
-import { Body, Controller, Post, Req, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Post,
+  Put,
+  Query,
+  Req,
+  Res,
+} from '@nestjs/common';
 
-import { CreatePatientDto } from './dto/patient';
+import {
+  CreatePatientDto,
+  GetPatientDto,
+  UpdatePatientDto,
+} from './dto/patient';
 import type { ICustomRequest } from '../../utils/common.interface';
 import type { Response } from 'express';
 import { PatientService } from './patient.service';
@@ -12,14 +26,44 @@ import { Roles } from '../../common/commons/decorator/roles.decorator';
 export class PatientController {
   constructor(private readonly patientService: PatientService) {}
 
+  @Get()
+  @Permission(EPermissions.VIEW_PATIENTS)
+  // @Roles(ERole.DOCTOR, ERole.ASSISTANT)
+  async getAllPatients(
+    @Query() dto: GetPatientDto,
+    @Req() req: ICustomRequest,
+    @Res() res: Response,
+  ) {
+    await this.patientService.getAllPatients(dto, req, res);
+  }
+
   @Post('/create')
   @Permission(EPermissions.MANAGE_PATIENTS)
-  //   @Roles(ERole.ADMIN)
   async createPatient(
     @Body() dto: CreatePatientDto,
     @Req() req: ICustomRequest,
     @Res() res: Response,
   ) {
     await this.patientService.addPatient(dto, req, res);
+  }
+
+  @Put('/update')
+  @Permission(EPermissions.MANAGE_PATIENTS)
+  async updatePatient(
+    @Body() dto: UpdatePatientDto,
+    @Req() req: ICustomRequest,
+    @Res() res: Response,
+  ) {
+    await this.patientService.updatePatient(dto, req, res);
+  }
+
+  @Delete('/delete')
+  @Permission(EPermissions.MANAGE_PATIENTS)
+  async deletePatient(
+    @Query() dto: GetPatientDto,
+    @Req() req: ICustomRequest,
+    @Res() res: Response,
+  ) {
+    await this.patientService.deletePatient(dto, req, res);
   }
 }

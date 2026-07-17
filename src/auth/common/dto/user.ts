@@ -9,7 +9,7 @@ import {
   IsString,
   MinLength,
 } from 'class-validator';
-import { EPermissions, ERole } from 'utils/common.enum';
+import { EPermissions, ERole } from '../../../../utils/common.enum';
 
 export class CreateUserDto {
   @IsString()

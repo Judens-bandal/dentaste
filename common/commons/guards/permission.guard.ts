@@ -88,7 +88,7 @@ export class PermissionGuard implements CanActivate {
 
     if (!user) {
       throw new ForbiddenException({
-        code: ErrorCode.MISSING_AUTH_CLAIMS,
+        code: ErrorCode.NO_PERMISSION,
       });
     }
 

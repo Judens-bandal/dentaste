@@ -35,8 +35,8 @@ export class Appointment {
   branch: EBranch;
 
   // Renamed from date (DATE) — now stores exact date AND time.
-  @Column({ name: 'scheduled_at', type: 'timestamptz' })
-  scheduledAt: Date;
+  @Column({ name: 'scheduled_at' })
+  scheduledAt: string;
 
   @Column({ name: 'treatment_done', type: 'text' })
   treatmentDone: string;
@@ -54,7 +54,7 @@ export class Appointment {
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   balance: number;
 
-  @Column({ name: 'no_show', type: 'boolean', default: false })
+  @Column({ name: 'no_show', type: 'smallint', default: 0 })
   noShow: number;
 
   @CreateDateColumn({ name: 'created_at' })

@@ -11,13 +11,11 @@ import {
   IsOptional,
 } from 'class-validator';
 import { EBranch } from '../enum/appointment';
+import { Optional } from '@nestjs/common';
 
 export class CreateAppointmentDto {
-  @IsOptional()
-  id?: string;
-
   @IsUUID()
-  patientId: string;
+  id: string;
 
   @IsEnum(EBranch)
   branch: EBranch;
@@ -42,4 +40,40 @@ export class CreateAppointmentDto {
 
   @IsOptional()
   noShow?: number;
+}
+
+export class UpdateAppointmentDto {
+  @IsUUID()
+  id: string;
+
+  @IsOptional()
+  @IsEnum(EBranch)
+  branch?: EBranch;
+
+  @IsOptional()
+  @IsDateString()
+  scheduledAt?: string;
+
+  @IsOptional()
+  @IsString()
+  treatmentDone?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  debitAmount?: number;
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  balance?: number;
+
+  @IsOptional()
+  noShow?: number;
+}
+
+export class GetAppointmentDto {
+  @Optional()
+  @IsString()
+  id?: string;
 }

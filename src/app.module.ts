@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from '../common/database/database.module';
 import { AuthModule } from './auth/auth.module';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 
 import { HealthModule } from './health/health.module';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -15,14 +15,38 @@ import { PermissionGuard } from '../common/commons/guards/permission.guard';
 import { AppThrottlerGuard } from '../common/commons/guards/rate.limiter';
 import { PaymentModule } from './payment/payment.module';
 import { AppointmentModule } from './appointment/appointment.module';
+import { JwtAuthGuard } from '../common/commons/guards/jwt-auth.guard';
+import { NotificationModule } from './notification/notification.module';
+import { RedisUtilModule } from './redis/redis-util.module';
+import { LoggingInterceptor } from '../common/commons/interceptors/logging.interceptors';
+import { WebsocketModule } from './websocket/websocket.module';
+import { ConfigModule } from '@nestjs/config';
+import { configValidationSchema } from '../common/database/config.schema';
 
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: [`.env.stage.${process.env.STAGE}`],
+      validationSchema: configValidationSchema,
+      cache: true,
+      expandVariables: true,
+    }),
     DatabaseModule,
     AppointmentModule,
     AuthModule,
     HealthModule,
     ScheduleModule,
+
+    PatientModule,
+
+    PaymentModule,
+
+    NotificationModule,
+
+    RedisUtilModule,
+
+    WebsocketModule,
 
     ScheduleModule.forRoot(),
 
@@ -42,17 +66,17 @@ import { AppointmentModule } from './appointment/appointment.module';
         // ),
       }),
     }),
-
-    PatientModule,
-
-    PaymentModule,
   ],
 
   providers: [
-    // {
-    //   provide: APP_GUARD,
-    //   useClass: JwtAuthGuard,
-    // },
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: AppThrottlerGuard,
+    },
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
@@ -62,8 +86,8 @@ import { AppointmentModule } from './appointment/appointment.module';
       useClass: PermissionGuard,
     },
     {
-      provide: APP_GUARD,
-      useClass: AppThrottlerGuard,
+      provide: APP_INTERCEPTOR,
+      useClass: LoggingInterceptor,
     },
   ],
 })
