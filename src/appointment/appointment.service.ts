@@ -1,40 +1,52 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { Appointment } from './entity/appointment';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IResponse } from '../../utils/common.interface';
 import type { Response } from 'express';
 import { ErrorCode } from '../../utils/common.enum';
+
 import {
   assertBranchAllowedForDate,
+  assertNoScheduleConflict,
   expressResponse,
   extractUser,
   formatDateTime,
 } from '../../utils/common.helper';
 import {
   CreateAppointmentDto,
+  DeleteAppointmentDto,
   GetAppointmentDto,
   UpdateAppointmentDto,
 } from './dto/appointment';
 
 import { RedisCacheService } from '../redis/redis-cach.service';
-import { NotificationHelper } from '../notification/common/notification.helper';
+
+import {
+  EDoctorAppointmentNotification,
+  NotificationHelper,
+} from '../notification/common/notification.helper';
 import type {
   IAppointments,
   ICustomRequest,
 } from '../../utils/common.interface';
-// import { APPOINTMENT_TTL } from '../redis/redis.ttl';
 
 import { APPIONMENT_TTL } from '../redis/redis.ttl';
 import { EStatus } from './enum/appointment';
 import { appointmentKey, appointmentsKey } from '../redis/redis.keys';
+import { Patient } from '../patient/entity/patient';
+import { RedisLock } from '../redis/redis.lock';
 
 @Injectable()
 export class AppointmentService {
   constructor(
     @InjectRepository(Appointment, 'main_repo')
     private readonly appointmentRepository: Repository<Appointment>,
+
+    @InjectRepository(Patient, 'main_repo')
+    private readonly patientRepository: Repository<Patient>,
     private readonly redis: RedisCacheService,
+    private readonly redisLock: RedisLock,
     private readonly notificationHelper: NotificationHelper,
   ) {}
 
@@ -68,10 +80,14 @@ export class AppointmentService {
         select: {
           id: true,
           branch: true,
+          treatmentDone: true,
           scheduledAt: true,
+          noShow: true,
           patient: {
             id: true,
             name: true,
+            cellphoneNumber: true,
+            address: true,
           },
         },
         order: { scheduledAt: 'DESC' },
@@ -84,9 +100,13 @@ export class AppointmentService {
           id: appointment.id ?? null,
           patient: {
             name: appointment.patient?.name ?? null,
+            cellphoneNumber: appointment.patient?.cellphoneNumber ?? null,
+            address: appointment.patient?.address ?? null,
           },
           branch: appointment.branch,
-          scheduledAt: formatDateTime(appointment.scheduledAt),
+          treatmentDone: appointment.treatmentDone ?? null,
+          noShow: appointment.noShow ? EStatus.ACTIVE : EStatus.INACTIVE,
+          scheduledAt: formatDateTime(appointment.scheduledAt), // display formatting — fine here, this is output only
         });
       }
 
@@ -94,9 +114,7 @@ export class AppointmentService {
       response.code = HttpStatus.OK;
       response.data = { code: 0, data };
     } catch (error) {
-      //   errorLog(`CATCH: getAllAppointments`, {
-      //     catch_error: extractError(error),
-      //   });
+      console.error('Error fetching appointments:', error);
       response.data = { code: ErrorCode.INTERNAL_SERVER_ERROR };
       response.code = HttpStatus.INTERNAL_SERVER_ERROR;
     } finally {
@@ -111,6 +129,21 @@ export class AppointmentService {
   ) {
     const response: IResponse = { code: HttpStatus.ACCEPTED, data: null };
 
+    // lock scoped to this exact branch+time slot, so two near-simultaneous
+    // requests can't both pass the conflict check before either finishes saving
+    const lockResource = this.redisLock.generateLock(
+      'appointment-slot',
+      `${dto.branch}:${dto.scheduledAt}`,
+    );
+    const lock = await this.redisLock.singleLock(lockResource, 5000);
+
+    if (!lock) {
+      response.data = { code: ErrorCode.SCHEDULE_CONFLICT };
+      response.code = HttpStatus.CONFLICT;
+      expressResponse(res, response);
+      return;
+    }
+
     try {
       const { id } = extractUser(req, dto);
 
@@ -123,12 +156,19 @@ export class AppointmentService {
       // enforce the 2nd Thu/Fri-of-the-month Calbayog-only rule
       assertBranchAllowedForDate(new Date(dto.scheduledAt), dto.branch);
 
+      await assertNoScheduleConflict(
+        this.appointmentRepository,
+        dto.branch,
+        dto.scheduledAt,
+      );
+
       const appointment = this.appointmentRepository.create({
-        patientId: dto.id,
+        patientId: dto.patientId,
         branch: dto.branch,
-        scheduledAt: dto.scheduledAt,
+        scheduledAt: dto.scheduledAt, // raw ISO value — DO NOT format before persisting
         treatmentDone: dto.treatmentDone,
         debitAmount: dto.debitAmount,
+        noShow: dto.noShow,
         // balance omitted — trg_appointments_recalc_balance computes it on INSERT
       });
 
@@ -136,28 +176,46 @@ export class AppointmentService {
 
       await this.redis.del(appointmentsKey());
 
-      //   void this.notificationHelper.notifyAdmins(
-      //     'APPOINTMENT_CREATED',
-      //     `New appointment scheduled at ${dto.branch} on ${formatDateTime(dto.scheduledAt)}`,
-      //     { id: saved.id },
-      //   );
+      const patient = await this.patientRepository.findOne({
+        where: { id: saved.patientId },
+        select: { name: true },
+      });
+
+      void this.notificationHelper.notifyDoctors(
+        EDoctorAppointmentNotification.APPOINTMENT_CREATED,
+        `New appointment for ${patient?.name ?? 'a patient'} scheduled at ${saved.branch} on ${formatDateTime(saved.scheduledAt)}.`,
+        {
+          branch: saved.branch,
+          scheduledAt: formatDateTime(saved.scheduledAt), // display-formatted for the notification only
+          patientName: patient?.name,
+        },
+      );
 
       response.data = {
         code: 0,
-        data: {
-          ...saved,
-          scheduledAt: formatDateTime(saved.scheduledAt),
-        },
+        data: { ...saved, scheduledAt: formatDateTime(saved.scheduledAt) },
       };
       response.code = HttpStatus.CREATED;
     } catch (error) {
       console.error('Error creating appointment:', error);
-      response.data = { code: ErrorCode.INTERNAL_SERVER_ERROR };
-      response.code = HttpStatus.INTERNAL_SERVER_ERROR;
+
+      if (error instanceof HttpException) {
+        const errorResponse = error.getResponse();
+        response.data =
+          typeof errorResponse === 'string'
+            ? { message: errorResponse }
+            : (errorResponse as Record<string, any>);
+        response.code = error.getStatus();
+      } else {
+        response.data = { code: ErrorCode.INTERNAL_SERVER_ERROR };
+        response.code = HttpStatus.INTERNAL_SERVER_ERROR;
+      }
     } finally {
+      await this.redisLock.releaseLock(lock);
       expressResponse(res, response);
     }
   }
+
   async updateAppointment(
     dto: UpdateAppointmentDto,
     req: ICustomRequest,
@@ -186,40 +244,90 @@ export class AppointmentService {
 
       const newScheduledAt = dto.scheduledAt ?? existing.scheduledAt;
       const newBranch = dto.branch ?? existing.branch;
+
+      // enforce the 2nd Thu/Fri-of-the-month Calbayog-only rule
       assertBranchAllowedForDate(new Date(newScheduledAt), newBranch);
 
-      const appointment: Partial<Appointment> = {
-        branch: newBranch,
-        scheduledAt: newScheduledAt,
-        treatmentDone: dto.treatmentDone ?? existing.treatmentDone,
-        debitAmount: dto.debitAmount ?? existing.debitAmount,
-        noShow:
-          (dto.noShow ?? existing.noShow) ? EStatus.ACTIVE : EStatus.INACTIVE,
-      };
+      const lockResource = this.redisLock.generateLock(
+        'appointment-slot',
+        `${newBranch}:${newScheduledAt}`,
+      );
+      const lock = await this.redisLock.singleLock(lockResource, 5000);
 
-      await this.appointmentRepository.update({ id: dto.id }, appointment);
-      await this.redis.del(appointmentKey(dto.id));
-      await this.redis.del(appointmentsKey());
+      if (!lock) {
+        response.data = { code: ErrorCode.SCHEDULE_CONFLICT };
+        response.code = HttpStatus.CONFLICT;
+        return;
+      }
 
-      //   void this.notificationHelper.notifyAdmins(
-      //     'APPOINTMENT_UPDATED',
-      //     `Appointment updated (now ${newScheduledAt}, ${newBranch})`,
-      //     { id: dto.id },
-      //   );
+      try {
+        await assertNoScheduleConflict(
+          this.appointmentRepository,
+          newBranch,
+          newScheduledAt,
+          dto.id, // exclude this appointment from conflicting with itself
+        );
 
-      response.data = { code: 0, data: appointment };
-      response.code = HttpStatus.OK;
+        const appointment: Partial<Appointment> = {
+          branch: newBranch,
+          scheduledAt: newScheduledAt, // raw value — not formatted
+          treatmentDone: dto.treatmentDone ?? existing.treatmentDone,
+          debitAmount: dto.debitAmount ?? existing.debitAmount,
+          noShow: dto.noShow ?? existing.noShow,
+        };
+
+        await this.appointmentRepository.update({ id: dto.id }, appointment);
+        await this.redis.del(appointmentKey(dto.id));
+        await this.redis.del(appointmentsKey());
+
+        const patient = await this.patientRepository.findOne({
+          where: { id: existing.patientId },
+          select: { name: true },
+        });
+
+        void this.notificationHelper.notifyDoctors(
+          EDoctorAppointmentNotification.APPOINTMENT_UPDATED,
+          `Appointment for ${patient?.name ?? 'a patient'} updated — now ${newBranch} on ${formatDateTime(newScheduledAt)}.`,
+          {
+            branch: newBranch,
+            scheduledAt: formatDateTime(newScheduledAt),
+            patientName: patient?.name,
+          },
+        );
+
+        response.data = {
+          code: 0,
+          data: {
+            ...existing,
+            ...appointment,
+            scheduledAt: formatDateTime(newScheduledAt),
+          },
+        };
+        response.code = HttpStatus.OK;
+      } finally {
+        await this.redisLock.releaseLock(lock);
+      }
     } catch (error) {
       console.error('Error updating appointment:', error);
-      response.data = { code: ErrorCode.INTERNAL_SERVER_ERROR };
-      response.code = HttpStatus.INTERNAL_SERVER_ERROR;
+
+      if (error instanceof HttpException) {
+        const errorResponse = error.getResponse();
+        response.data =
+          typeof errorResponse === 'string'
+            ? { message: errorResponse }
+            : (errorResponse as Record<string, any>);
+        response.code = error.getStatus();
+      } else {
+        response.data = { code: ErrorCode.INTERNAL_SERVER_ERROR };
+        response.code = HttpStatus.INTERNAL_SERVER_ERROR;
+      }
     } finally {
       expressResponse(res, response);
     }
   }
 
   async deleteAppointment(
-    dto: GetAppointmentDto,
+    dto: DeleteAppointmentDto,
     req: ICustomRequest,
     res: Response,
   ) {
@@ -243,10 +351,24 @@ export class AppointmentService {
         response.code = HttpStatus.NOT_FOUND;
         return;
       }
+      const patient = await this.patientRepository.findOne({
+        where: { id: appointment.patientId },
+        select: { name: true },
+      });
 
+      if (!patient) {
+        response.data = { code: ErrorCode.APPOINTMENT_NOT_FOUND };
+        response.code = HttpStatus.NOT_FOUND;
+        return;
+      }
       await this.appointmentRepository.delete({ id: dto.id });
-      await this.redis.del(appointmentKey(id));
+      await this.redis.del(appointmentKey(dto.id));
       await this.redis.del(appointmentsKey());
+
+      void this.notificationHelper.notifyDoctors(
+        EDoctorAppointmentNotification.APPOINTMENT_DELETED,
+        `Appointment ${patient.name} was canceled.`,
+      );
 
       response.data = { code: 0 };
       response.code = HttpStatus.OK;

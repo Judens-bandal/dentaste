@@ -1,87 +1,3 @@
-// import { Injectable, Inject, forwardRef } from '@nestjs/common';
-// import { WebsocketService } from '../../websocket/websocket.service';
-
-// // ADMIN notifications
-// export enum EAdminNotification {
-//   USER_REGISTERED = ' New user registered',
-//   USER_LOGIN = 'User login',
-// }
-
-// // PROJECT MANAGER notifications
-// export enum EManagerNotification {
-//   PROJECT_CREATED = 'New Project created',
-//   PROJECT_UPDATED = 'Project updated',
-//   PROJECT_DELETED = 'Project deleted',
-//   PROJECT_STATUS_CHANGED = 'Project status change',
-// }
-
-// // MEMBER notifications
-// export enum EMemberNotification {
-//   TASK_ASSIGNED = ' Task assigned',
-//   TASK_STATUS_UPDATED = ' Task status updated',
-//   TASK_DELETED = 'Task deleted',
-// }
-
-// export type ENotificationType =
-//   | EAdminNotification
-//   | EManagerNotification
-//   | EMemberNotification;
-
-// @Injectable()
-// export class NotificationHelper {
-//   constructor(
-//     @Inject(forwardRef(() => WebsocketService))
-//     private readonly websocket: WebsocketService,
-//   ) {}
-
-//   async notify(
-//     userId: number,
-//     type: ENotificationType,
-//     message: string,
-//     extra?: Record<string, unknown>,
-//   ): Promise<void> {
-//     await this.websocket.publishNotification(userId, {
-//       notification_type: type,
-//       message,
-//       created_at: new Date().toISOString(),
-//       ...extra,
-//     });
-//   }
-
-//   // ── Admin ────────────────────────────────────────────
-//   async notifyAdmins(
-//     adminId: number,
-//     type: EAdminNotification,
-//     message: string,
-//     extra?: Record<string, unknown>,
-//   ): Promise<void> {
-//     // await Promise.all(
-//     // adminIds.map((id) => this.notify(id, type, message, extra)),
-//     await this.notify(adminId, type, message, extra);
-//     // );
-//   }
-
-//   // ── Manager ──────────────────────────────────────────
-//   async notifyManager(
-//     managerId: number,
-//     type: EManagerNotification,
-//     message: string,
-//     extra?: Record<string, unknown>,
-//   ): Promise<void> {
-//     await this.notify(managerId, type, message, extra);
-//   }
-
-//   // ── Member ───────────────────────────────────────────
-//   async notifyMember(
-//     memberId: number,
-//     type: EMemberNotification,
-//     message: string,
-//     extra?: Record<string, unknown>,
-//   ): Promise<void> {
-//     await this.notify(memberId, type, message, extra);
-//   }
-// }
-
 import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -89,32 +5,66 @@ import { WebsocketService } from '../../websocket/websocket.service';
 import { User } from '../../auth/common/entity/user';
 import { ERole } from '../../../utils/common.enum';
 
-// ADMIN notifications
+// ADMIN notifications — clinic-wide visibility across all branches
 export enum EAdminNotification {
   USER_REGISTERED = 'New user registered',
   USER_LOGIN = 'User login',
+  PATIENT_CREATED = 'New patient registered',
+  APPOINTMENT_CREATED = 'New appointment scheduled',
+  APPOINTMENT_UPDATED = 'Appointment updated',
+  APPOINTMENT_DELETED = 'Appointment deleted',
+  PAYMENT_RECEIVED = 'Payment received',
+  BRANCH_CONFLICT_ATTEMPT = 'Branch scheduling rule violated',
+  SCHEDULE_CONFLICT_ATTEMPT = 'Schedule conflict attempted',
+  AI_SETTINGS_UPDATED = 'AI settings updated',
 }
 
-// PROJECT MANAGER notifications
-export enum EManagerNotification {
-  PROJECT_CREATED = 'New Project created',
-  PROJECT_UPDATED = 'Project updated',
-  PROJECT_DELETED = 'Project deleted',
-  PROJECT_STATUS_CHANGED = 'Project status change',
-  TASK_CREATED = 'Task created', // ← add: managers care about tasks too
-  TASK_STATUS_CHANGED = 'Task status changed',
-  TASK_DELETED = 'Task deleted',
+// DOCTOR notifications — patients, payments, assistant management
+// (appointment-specific events live in EDoctorAppointmentNotification below)
+export enum EDoctorNotification {
+  PATIENT_CREATED = 'New patient registered',
+  PATIENT_UPDATED = 'Patient updated',
+  PATIENT_DELETED = 'Patient deleted',
+  PAYMENT_RECEIVED = 'Payment received for your appointment',
+  BALANCE_OUTSTANDING = 'Patient still has an outstanding balance',
+  ASSISTANT_PERMISSIONS_CHANGED = 'Assistant permissions updated',
 }
 
-// MEMBER notifications
-export enum EMemberNotification {
-  TASK_ASSIGNED = 'Task assigned',
-  TASK_STATUS_UPDATED = 'Task status updated',
-  TASK_DELETED = 'Task deleted',
+// DOCTOR appointment notifications — the appointment lifecycle specifically
+export enum EDoctorAppointmentNotification {
+  APPOINTMENT_CREATED = 'New appointment scheduled',
+  APPOINTMENT_UPDATED = 'Appointment updated',
+  APPOINTMENT_DELETED = 'Appointment cancelled',
+  APPOINTMENT_NO_SHOW = 'Patient marked as no-show',
+  APPOINTMENT_REMINDER = 'Upcoming appointment reminder',
 }
 
+// ASSISTANT notifications — patients, payments, permissions
+// (appointment-specific events live in EAssistantAppointmentNotification below)
+export enum EAssistantNotification {
+  PAYMENT_RECORDED = 'Payment recorded',
+  PATIENT_CREATED = 'Patient registered',
+  PERMISSIONS_CHANGED = 'Your permissions were updated',
+}
+
+// ASSISTANT appointment notifications — the appointment lifecycle specifically
+export enum EAssistantAppointmentNotification {
+  APPOINTMENT_CREATED = 'Appointment scheduled',
+  APPOINTMENT_UPDATED = 'Appointment updated',
+  APPOINTMENT_DELETED = 'Appointment deleted',
+  APPOINTMENT_REMINDER = 'Upcoming appointment reminder',
+}
+
+// broadened to include every enum notify()/notifyDoctor()/notifyAssistant()
+// might actually be called with — previously this only listed the
+// non-appointment enums, so TypeScript rejected any appointment-lifecycle
+// notification passed through notifyDoctor/notifyAssistant.
 export type ENotificationType =
-  EAdminNotification | EManagerNotification | EMemberNotification;
+  | EAdminNotification
+  | EDoctorNotification
+  | EDoctorAppointmentNotification
+  | EAssistantNotification
+  | EAssistantAppointmentNotification;
 
 @Injectable()
 export class NotificationHelper {
@@ -156,23 +106,39 @@ export class NotificationHelper {
     );
   }
 
-  // ── Manager ──────────────────────────────────────────
+  // ── Doctor (broadcast to every doctor) ────────────────
+  async notifyDoctors(
+    type: EDoctorNotification | EDoctorAppointmentNotification,
+    message: string,
+    extra?: Record<string, unknown>,
+  ): Promise<void> {
+    const doctors = await this.userRepo.find({
+      where: { role: ERole.DOCTOR },
+      select: { id: true },
+    });
+
+    await Promise.all(
+      doctors.map((doctor) => this.notify(doctor.id, type, message, extra)),
+    );
+  }
+
+  // ── Doctor (single, e.g. the doctor assigned to a specific appointment) ──
   async notifyDoctor(
     id: string,
-    type: EManagerNotification,
+    type: EDoctorNotification | EDoctorAppointmentNotification,
     message: string,
     extra?: Record<string, unknown>,
   ): Promise<void> {
     await this.notify(id, type, message, extra);
   }
 
-  // ── Member ───────────────────────────────────────────
-  //   async notifyMember(
-  //     memberId: number,
-  //     type: EMemberNotification,
-  //     message: string,
-  //     extra?: Record<string, unknown>,
-  //   ): Promise<void> {
-  //     await this.notify(memberId, type, message, extra);
-  //   }
+  // ── Assistant ────────────────────────────────────────
+  async notifyAssistant(
+    id: string,
+    type: EAssistantNotification | EAssistantAppointmentNotification,
+    message: string,
+    extra?: Record<string, unknown>,
+  ): Promise<void> {
+    await this.notify(id, type, message, extra);
+  }
 }

@@ -9,6 +9,9 @@ import { Response } from 'express';
 import { ERole, ErrorCode } from './common.enum.js';
 import { BadRequestException } from '@nestjs/common';
 import { EBranch } from '../src/appointment/enum/appointment.js';
+import { Repository } from 'typeorm';
+import { Appointment } from '../src/appointment/entity/appointment.js';
+import { SCHEDULE_CONFLICT_BUFFER_MINUTES } from './common.constant.js';
 
 export function transformDateToISOString({
   value,
@@ -305,7 +308,55 @@ export function formatDateTime(
 
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
 
-  const period = get('dayPeriod').toLowerCase(); // "PM" -> "pm"
+  const period = get('dayPeriod').toLocaleUpperCase(); // "PM" -> "pm"
 
   return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')} ${period}`;
+}
+
+// Throws if the given branch already has an appointment scheduled within
+// +/- SCHEDULE_CONFLICT_BUFFER_MINUTES of the requested time. scheduledAt
+// is stored as TEXT, so the overlap check happens in code (parsed Dates),
+// not via a SQL range query — a plain string match wouldn't catch times
+// that are close but not byte-identical (e.g. different seconds/offset).
+export async function assertNoScheduleConflict(
+  appointmentRepository: Repository<Appointment>,
+  branch: string,
+  scheduledAt: string,
+  excludeAppointmentId?: string,
+): Promise<void> {
+  const requestedTime = new Date(scheduledAt).getTime();
+  const bufferMs = SCHEDULE_CONFLICT_BUFFER_MINUTES * 60 * 1000;
+
+  const dayStart = new Date(scheduledAt);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(scheduledAt);
+  dayEnd.setHours(23, 59, 59, 999);
+
+  // narrow to same-day appointments at that branch first (cheap DB filter),
+  // then do the precise +/- buffer comparison in JS against parsed times
+  const sameBranchSameDay = await appointmentRepository
+    .createQueryBuilder('appointment')
+    .where('appointment.branch = :branch', { branch })
+    .andWhere('appointment.scheduled_at >= :dayStart', {
+      dayStart: dayStart.toISOString(),
+    })
+    .andWhere('appointment.scheduled_at <= :dayEnd', {
+      dayEnd: dayEnd.toISOString(),
+    })
+    .getMany();
+
+  const hasConflict = sameBranchSameDay.some((existing) => {
+    if (excludeAppointmentId && existing.id === excludeAppointmentId) {
+      return false; // skip the appointment being updated against itself
+    }
+    const existingTime = new Date(existing.scheduledAt).getTime();
+    return Math.abs(existingTime - requestedTime) < bufferMs;
+  });
+
+  if (hasConflict) {
+    throw new BadRequestException({
+      code: ErrorCode.SCHEDULE_CONFLICT,
+      message: `${branch} already has an appointment within ${SCHEDULE_CONFLICT_BUFFER_MINUTES} minutes of this time.`,
+    });
+  }
 }

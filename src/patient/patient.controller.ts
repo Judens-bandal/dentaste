@@ -21,6 +21,7 @@ import { PatientService } from './patient.service';
 import { Permission } from '../../common/commons/decorator/permissions.decorator';
 import { EPermissions, ERole } from '../../utils/common.enum';
 import { Roles } from '../../common/commons/decorator/roles.decorator';
+import { DeleteAppointmentDto } from '../appointment/dto/appointment';
 
 @Controller('patient')
 export class PatientController {

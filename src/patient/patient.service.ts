@@ -13,8 +13,13 @@ import {
 } from './dto/patient';
 import { patientKey, patientsKey } from '../redis/redis.keys';
 import { RedisCacheService } from '../redis/redis-cach.service';
-import { NotificationHelper } from '../notification/common/notification.helper';
+import {
+  EAdminNotification,
+  EDoctorNotification,
+  NotificationHelper,
+} from '../notification/common/notification.helper';
 import { PATIENT_TTL } from '../redis/redis.ttl';
+import { DeleteAppointmentDto } from '../appointment/dto/appointment';
 
 @Injectable()
 export class PatientService {
@@ -56,6 +61,7 @@ export class PatientService {
         },
       });
       await this.redis.set(cachekey, patient, PATIENT_TTL);
+
       response.data = { code: 0, data: patient };
       response.code = HttpStatus.OK;
     } catch (error) {
@@ -88,6 +94,12 @@ export class PatientService {
 
       await this.patientRepository.save(patient);
       await this.redis.del(patientsKey());
+      void this.notificationHelper.notifyDoctor(
+        id,
+        EDoctorNotification.PATIENT_CREATED,
+        'A new patient has been added.',
+        { name: patient.name },
+      );
       response.data = { code: 0, data: patient };
       response.code = HttpStatus.CREATED;
     } catch (error) {
@@ -137,6 +149,12 @@ export class PatientService {
       await this.patientRepository.update({ id: dto.id }, patient);
       await this.redis.del(patientKey(id));
       await this.redis.del(patientsKey());
+      void this.notificationHelper.notifyDoctor(
+        id,
+        EDoctorNotification.PATIENT_UPDATED,
+        'New patient has been updated.',
+        { name: patient.name },
+      );
       response.data = { code: 0, data: patient };
       response.code = HttpStatus.OK;
     } catch (error) {
@@ -173,6 +191,14 @@ export class PatientService {
       await this.patientRepository.delete({ id: dto.id });
       await this.redis.del(patientKey(id));
       await this.redis.del(patientsKey());
+
+      // in PatientService.addPatient(), after saving
+      void this.notificationHelper.notifyDoctor(
+        id,
+        EDoctorNotification.PATIENT_DELETED,
+        `A new patient, ${patient.name}, has been deleted.`,
+      );
+
       response.data = { code: 0 };
       response.code = HttpStatus.OK;
     } catch (error) {

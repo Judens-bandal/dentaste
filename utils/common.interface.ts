@@ -50,8 +50,12 @@ export interface IAppointments {
   id: string;
   patient: {
     name: string;
+    cellphoneNumber: string;
+    address: string;
   };
   branch: string;
+  treatmentDone: string;
+  noShow: number;
   scheduledAt: string;
 }
 
