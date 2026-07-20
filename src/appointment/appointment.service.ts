@@ -273,7 +273,8 @@ export class AppointmentService {
           scheduledAt: newScheduledAt, // raw value — not formatted
           treatmentDone: dto.treatmentDone ?? existing.treatmentDone,
           debitAmount: dto.debitAmount ?? existing.debitAmount,
-          noShow: dto.noShow ?? existing.noShow,
+          noShow:
+            (dto.noShow ?? existing.noShow) ? EStatus.INACTIVE : EStatus.ACTIVE,
         };
 
         await this.appointmentRepository.update({ id: dto.id }, appointment);
