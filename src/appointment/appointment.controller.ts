@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -16,12 +17,15 @@ import {
   DeleteAppointmentDto,
   GetAppointmentDto,
   UpdateAppointmentDto,
+  UpdateAppointmentStatusDto,
 } from './dto/appointment';
 import type { ICustomRequest } from '../../utils/common.interface';
 import type { Response } from 'express';
 import { Permission } from '../../common/commons/decorator/permissions.decorator';
 import { EPermissions } from '../../utils/common.enum';
+import { ApiBearerAuth } from '@nestjs/swagger';
 
+@ApiBearerAuth()
 @Controller('appointments')
 export class AppointmentController {
   constructor(private appointmentService: AppointmentService) {}
@@ -61,5 +65,14 @@ export class AppointmentController {
     @Res() res: Response,
   ) {
     return await this.appointmentService.deleteAppointment(dto, req, res);
+  }
+  @Permission(EPermissions.MANAGE_APPOINTMENTS)
+  @Patch('status')
+  async updateAppointmentStatus(
+    @Body() dto: UpdateAppointmentStatusDto,
+    @Req() req: ICustomRequest,
+    @Res() res: Response,
+  ) {
+    return await this.appointmentService.updateAppointmentStatus(dto, req, res);
   }
 }

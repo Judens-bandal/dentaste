@@ -21,6 +21,10 @@ import {
   MAX_FAILED_ATTEMPTS,
 } from '../../utils/common.constant';
 import { DEFAULT_ROLE_PERMISSIONS } from '../../utils/role.permission.constant';
+import {
+  EAdminNotification,
+  NotificationHelper,
+} from '../notification/common/notification.helper';
 
 @Injectable()
 export class AuthService {
@@ -29,7 +33,7 @@ export class AuthService {
     private userRepository: Repository<User>,
 
     private readonly jwtService: JwtService,
-    // private readonly notificationHelper: NotificationHelper, for redis
+    private readonly notificationHelper: NotificationHelper,
   ) {}
 
   verifyToken(token: string): JwtPayload {
@@ -75,11 +79,10 @@ export class AuthService {
     await this.userRepository.save(user);
 
     // for notification
-    // void this.notificationHelper.notifyAdmins(
-    //   EAdminNotification.USER_REGISTERED,
-    //   `New user "${name}" registered`,
-    //   { id: user.id },
-    // );
+    void this.notificationHelper.notifyAdmins(
+      EAdminNotification.USER_REGISTERED,
+      `New user "${name}" registered`,
+    );
   }
 
   //   async login(
@@ -239,11 +242,10 @@ export class AuthService {
       expiresIn: EXP, // 1 day, in seconds
     });
 
-    // void this.notificationHelper.notifyAdmins(
-    //   EAdminNotification.USER_LOGIN,
-    //   `${user.name} logged in`,
-    //   { id: user.id },
-    // );
+    void this.notificationHelper.notifyAdmins(
+      EAdminNotification.USER_LOGIN,
+      `${user.name} logged in`,
+    );
 
     return { accessToken };
   }

@@ -11,7 +11,9 @@ import { RolesGuard } from '../../common/commons/guards/roles.guard';
 import { NotificationService } from './notification.service';
 import { GetUser } from '../auth/common/get.user.decorator';
 import { User } from '../auth/common/entity/user';
+import { ApiBearerAuth } from '@nestjs/swagger';
 
+@ApiBearerAuth()
 @UseGuards(RolesGuard)
 @Controller('notification')
 export class NotificationController {

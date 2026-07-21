@@ -3,6 +3,11 @@ import { AppModule } from './app.module';
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { ErrorCode } from '../utils/common.enum';
 import { TransformInterceptor } from '../common/commons/interceptors/transform.interceptors';
+import {
+  DocumentBuilder,
+  SwaggerDocumentOptions,
+  SwaggerModule,
+} from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -28,6 +33,50 @@ async function bootstrap() {
       },
     }),
   );
+
+  const config = new DocumentBuilder()
+    .addBearerAuth()
+    .setTitle('Lorem API')
+    .setDescription(
+      ' Lorem ipsum dolor sit amet, consectetur adipisicing elit. Delectus quas esse sint, accusamus quasi asperiores, perspiciatis harum ut similique voluptatibus cumque nisi molestias ex, excepturi id. Minima nulla distinctio veritatis.',
+    )
+    .setVersion('1.0')
+    .build();
+
+  // Swagger Document Options
+  const options: SwaggerDocumentOptions = {
+    // Include specific modules (optional)
+    // include: [TasksModule, UsersModule],
+
+    // Extra models that might not be auto-detected
+    // extraModels: [YourResponseDto, PaginationDto],
+
+    ignoreGlobalPrefix: false,
+    deepScanRoutes: true, // Recommended: scans imported modules too
+    autoTagControllers: true, // Auto-generates tags from controller names
+
+    // Custom operation ID (cleaner than default)
+    operationIdFactory: (
+      controllerKey: string,
+      methodKey: string,
+      version?: string,
+    ) => `${controllerKey}_${methodKey}`,
+  };
+
+  // Create document with options
+  const document = SwaggerModule.createDocument(app, config, options);
+
+  // === Export Swagger JSON file ===
+
+  SwaggerModule.setup('api', app, document, {
+    jsonDocumentUrl: 'api-json', // Access full JSON at /api-json
+    yamlDocumentUrl: 'api-yaml', // Optional: YAML version
+    swaggerOptions: {
+      persistAuthorization: true,
+      tagsSorter: 'alpha',
+      operationsSorter: 'alpha',
+    },
+  });
 
   app.useGlobalInterceptors(new TransformInterceptor());
   await app.listen(process.env.PORT ?? 5000);

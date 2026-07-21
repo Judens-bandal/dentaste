@@ -12,7 +12,7 @@ import {
 import { Patient } from '../../patient/entity/patient';
 
 import { Payment } from '../../payment/entity/payment';
-import { EBranch } from '../enum/appointment';
+import { EAppointmentStatus, EBranch } from '../enum/appointment';
 import { Transform } from 'class-transformer';
 import { transformDateToISOString } from '../../../utils/common.helper';
 
@@ -54,8 +54,14 @@ export class Appointment {
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   balance: number;
 
-  @Column({ name: 'no_show', type: 'smallint', default: 0 })
-  noShow: number;
+  // appointment.entity.ts — remove the noShow @Column entirely, add:
+  @Column({
+    name: 'appointment_status',
+    type: 'varchar',
+    length: 20,
+    default: EAppointmentStatus.SCHEDULED,
+  })
+  appointmentStatus!: EAppointmentStatus;
 
   @CreateDateColumn({ name: 'created_at' })
   @Transform(transformDateToISOString)

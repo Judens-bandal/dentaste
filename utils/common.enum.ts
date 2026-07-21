@@ -106,6 +106,7 @@ export enum ErrorCode {
   // ==============================
   PATIENT_NOT_FOUND = 400151,
   PATIENT_ALREADY_EXIST = 400152,
+  PATIENT_SCHEDULE_CONFLICT = 400153,
 
   // ==============================
   // APPOINTMENT (400200)
@@ -115,13 +116,15 @@ export enum ErrorCode {
   APPOINTMENT_BRANCH_MISMATCH = 400203,
   APPOINTMENT_DATE_INVALID = 400204,
   APPOINTMENT_ALREADY_MARKED_NO_SHOW = 400205,
-
+  LOCK_BUSY = 40000,
+  STATUS_NOT_MANUALLY_SETTABLE = 4000206,
   // ==============================
   // PAYMENT (400250)
   // ==============================
   PAYMENT_NOT_FOUND = 400251,
   PAYMENT_APPOINTMENT_NOT_FOUND = 400252,
   PAYMENT_EXCEEDS_DEBIT_AMOUNT = 400253,
+  PAYMENT_EXCEEDS_BALANCE = 400254,
 
   // ==============================
   // AI SETTINGS (400300)

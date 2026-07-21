@@ -2,6 +2,10 @@ import { Request } from 'express';
 import { EPermissions, ERole } from './common.enum';
 import { JwtPayload } from '../src/auth/common/jwt-payload.interface';
 import { EPatientStatus } from '../src/patient/enum/enum';
+import {
+  EAppointmentStatus,
+  EPaymentStatus,
+} from '../src/appointment/enum/appointment';
 
 export interface IClaims {
   id: string;
@@ -46,6 +50,19 @@ export interface IResponse {
 //   creator_role: EAppRole;
 // }
 
+// export interface IAppointments {
+//   id: string;
+//   patient: {
+//     name: string;
+//     cellphoneNumber: string;
+//     address: string;
+//   };
+//   branch: string;
+//   treatmentDone: string;
+//   noShow: number;
+//   scheduledAt: string;
+// }
+
 export interface IAppointments {
   id: string;
   patient: {
@@ -55,10 +72,12 @@ export interface IAppointments {
   };
   branch: string;
   treatmentDone: string;
-  noShow: number;
   scheduledAt: string;
+  debitAmount: number;
+  balance: number;
+  appointmentStatus: EAppointmentStatus;
+  paymentStatus: EPaymentStatus;
 }
-
 export interface IPatient {
   id?: string;
 

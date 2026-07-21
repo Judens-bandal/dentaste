@@ -11,7 +11,10 @@ import { BadRequestException } from '@nestjs/common';
 import { EBranch } from '../src/appointment/enum/appointment.js';
 import { Repository } from 'typeorm';
 import { Appointment } from '../src/appointment/entity/appointment.js';
-import { SCHEDULE_CONFLICT_BUFFER_MINUTES } from './common.constant.js';
+import {
+  PATIENT_CONFLICT_BUFFER_MINUTES,
+  SCHEDULE_CONFLICT_BUFFER_MINUTES,
+} from './common.constant.js';
 
 export function transformDateToISOString({
   value,
@@ -357,6 +360,54 @@ export async function assertNoScheduleConflict(
     throw new BadRequestException({
       code: ErrorCode.SCHEDULE_CONFLICT,
       message: `${branch} already has an appointment within ${SCHEDULE_CONFLICT_BUFFER_MINUTES} minutes of this time.`,
+    });
+  }
+}
+
+// Throws if the SAME PATIENT already has an appointment within
+// +/- PATIENT_CONFLICT_BUFFER_MINUTES of the requested time, AT ANY BRANCH.
+// This is separate from assertNoScheduleConflict (which only checks
+// per-branch capacity) — a patient can't physically be at two branches
+// at once, regardless of whether each branch individually has room.
+export async function assertNoPatientScheduleConflict(
+  appointmentRepository: Repository<Appointment>,
+  patientId: string,
+  scheduledAt: string,
+  excludeAppointmentId?: string,
+): Promise<void> {
+  const requestedTime = new Date(scheduledAt).getTime();
+  const bufferMs = PATIENT_CONFLICT_BUFFER_MINUTES * 60 * 1000;
+
+  const dayStart = new Date(scheduledAt);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(scheduledAt);
+  dayEnd.setHours(23, 59, 59, 999);
+
+  // narrow to this patient's same-day appointments across ALL branches
+  // (no branch filter here — that's the whole point)
+  const sameDayForPatient = await appointmentRepository
+    .createQueryBuilder('appointment')
+    .where('appointment.patient_id = :patientId', { patientId })
+    .andWhere('appointment.scheduled_at >= :dayStart', {
+      dayStart: dayStart.toISOString(),
+    })
+    .andWhere('appointment.scheduled_at <= :dayEnd', {
+      dayEnd: dayEnd.toISOString(),
+    })
+    .getMany();
+
+  const hasConflict = sameDayForPatient.some((existing) => {
+    if (excludeAppointmentId && existing.id === excludeAppointmentId) {
+      return false; // skip the appointment being updated against itself
+    }
+    const existingTime = new Date(existing.scheduledAt).getTime();
+    return Math.abs(existingTime - requestedTime) < bufferMs;
+  });
+
+  if (hasConflict) {
+    throw new BadRequestException({
+      code: ErrorCode.PATIENT_SCHEDULE_CONFLICT,
+      message: `This patient already has an appointment within ${PATIENT_CONFLICT_BUFFER_MINUTES} minutes of this time at another branch.`,
     });
   }
 }

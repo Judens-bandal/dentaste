@@ -496,6 +496,7 @@ export class DatabaseService implements OnApplicationBootstrap {
     // await this.appointmentBalanceMigration();
     // await this.appointmentColumnTypeMigration();
     // await this.createIndexes();
+    // await this.appointmentStatusMigration();
   }
 
   // gen_random_uuid() lives in pgcrypto on Postgres < 14 — it's built into
@@ -572,7 +573,7 @@ export class DatabaseService implements OnApplicationBootstrap {
           treatment_done  TEXT          NOT NULL,
           debit_amount    NUMERIC(10,2) NOT NULL DEFAULT 0,
           balance         NUMERIC(10,2) NOT NULL DEFAULT 0,
-          no_show         SMALLINT      NOT NULL DEFAULT 0,
+          appointment_status  VARCHAR(20)   NOT NULL DEFAULT 'SCHEDULED',
           created_at      TIMESTAMP     NOT NULL DEFAULT NOW(),
           updated_at      TIMESTAMP     NOT NULL DEFAULT NOW(),
           PRIMARY KEY (id),
@@ -782,7 +783,7 @@ export class DatabaseService implements OnApplicationBootstrap {
         FROM information_schema.columns
         WHERE table_schema = current_schema()
         AND table_name = 'appointments'
-        AND column_name = 'no_show'
+        AND column_name = 'appointment_status'
       `);
 
       if (noShowType.length > 0 && noShowType[0].data_type !== 'smallint') {
@@ -809,6 +810,57 @@ export class DatabaseService implements OnApplicationBootstrap {
         'Error running appointment column type migration',
         error,
       );
+    }
+  }
+
+  // Adds appointments.appointment_status (if missing), backfilling it from
+  // the old no_show column before dropping no_show entirely. Safe to re-run —
+  // each step checks first.
+  async appointmentStatusMigration() {
+    try {
+      const statusColumnCheck = await this.dataSource.query(`
+      SELECT COUNT(*) as count
+      FROM information_schema.columns
+      WHERE table_schema = current_schema()
+      AND table_name = 'appointments'
+      AND column_name = 'appointment_status'
+    `);
+
+      if (Number(statusColumnCheck[0].count) === 0) {
+        await this.dataSource.query(`
+        ALTER TABLE appointments ADD COLUMN appointment_status VARCHAR(20) NOT NULL DEFAULT 'SCHEDULED';
+      `);
+        this.logger.log('appointments.appointment_status column added');
+      }
+
+      const noShowColumnCheck = await this.dataSource.query(`
+      SELECT COUNT(*) as count
+      FROM information_schema.columns
+      WHERE table_schema = current_schema()
+      AND table_name = 'appointments'
+      AND column_name = 'appointment_status'
+    `);
+
+      // if (Number(noShowColumnCheck[0].count) > 0) {
+      //   // backfill: existing no_show=1 rows become NO_SHOW
+      //   await this.dataSource.query(`
+      //   UPDATE appointments SET appointment_status = 'NO_SHOW' WHERE no_show = 1;
+      // `);
+      //   // backfill: already fully-paid rows become COMPLETED
+      //   await this.dataSource.query(`
+      //   UPDATE appointments SET appointment_status = 'COMPLETED' WHERE balance <= 0 AND no_show = 0;
+      // `);
+      //   await this.dataSource.query(`
+      //   ALTER TABLE appointments DROP COLUMN no_show;
+      // `);
+      //   this.logger.log(
+      //     'appointments.no_show backfilled into appointment_status and dropped',
+      //   );
+      // }
+
+      this.logger.log('Appointment status migration completed successfully');
+    } catch (error) {
+      this.logger.error('Error running appointment status migration', error);
     }
   }
 
@@ -845,24 +897,66 @@ export class DatabaseService implements OnApplicationBootstrap {
 
       // --- payments: recalc the related appointment's balance on any change ---
 
+      // await this.dataSource.query(`
+      //   CREATE OR REPLACE FUNCTION recalc_payment_appointment_balance() RETURNS TRIGGER AS $$
+      //   BEGIN
+      //     IF TG_OP = 'DELETE' THEN
+      //       UPDATE appointments
+      //       SET balance = debit_amount - COALESCE(
+      //         (SELECT SUM(amount_paid) FROM payments WHERE appointment_id = OLD.appointment_id), 0
+      //       )
+      //       WHERE id = OLD.appointment_id;
+      //       RETURN OLD;
+      //     END IF;
+
+      //     UPDATE appointments
+      //     SET balance = debit_amount - COALESCE(
+      //       (SELECT SUM(amount_paid) FROM payments WHERE appointment_id = NEW.appointment_id), 0
+      //     )
+      //     WHERE id = NEW.appointment_id;
+
+      //     IF TG_OP = 'UPDATE' AND OLD.appointment_id IS DISTINCT FROM NEW.appointment_id THEN
+      //       UPDATE appointments
+      //       SET balance = debit_amount - COALESCE(
+      //         (SELECT SUM(amount_paid) FROM payments WHERE appointment_id = OLD.appointment_id), 0
+      //       )
+      //       WHERE id = OLD.appointment_id;
+      //     END IF;
+
+      //     RETURN NEW;
+      //   END;
+      //   $$ LANGUAGE plpgsql;
+      // `);
       await this.dataSource.query(`
         CREATE OR REPLACE FUNCTION recalc_payment_appointment_balance() RETURNS TRIGGER AS $$
+        DECLARE
+          target_id CHAR(36);
+          new_balance NUMERIC(10,2);
+          current_status VARCHAR(20);
         BEGIN
           IF TG_OP = 'DELETE' THEN
-            UPDATE appointments
-            SET balance = debit_amount - COALESCE(
-              (SELECT SUM(amount_paid) FROM payments WHERE appointment_id = OLD.appointment_id), 0
-            )
-            WHERE id = OLD.appointment_id;
-            RETURN OLD;
+            target_id := OLD.appointment_id;
+          ELSE
+            target_id := NEW.appointment_id;
           END IF;
- 
+      
+          SELECT
+            debit_amount - COALESCE((SELECT SUM(amount_paid) FROM payments WHERE appointment_id = target_id), 0),
+            appointment_status
+          INTO new_balance, current_status
+          FROM appointments WHERE id = target_id;
+      
           UPDATE appointments
-          SET balance = debit_amount - COALESCE(
-            (SELECT SUM(amount_paid) FROM payments WHERE appointment_id = NEW.appointment_id), 0
-          )
-          WHERE id = NEW.appointment_id;
- 
+          SET
+            balance = new_balance,
+            appointment_status = CASE
+              WHEN current_status IN ('NO_SHOW', 'CANCELLED') THEN current_status
+              WHEN new_balance <= 0 THEN 'COMPLETED'
+              WHEN current_status = 'COMPLETED' AND new_balance > 0 THEN 'SCHEDULED'
+              ELSE current_status
+            END
+          WHERE id = target_id;
+      
           IF TG_OP = 'UPDATE' AND OLD.appointment_id IS DISTINCT FROM NEW.appointment_id THEN
             UPDATE appointments
             SET balance = debit_amount - COALESCE(
@@ -870,8 +964,8 @@ export class DatabaseService implements OnApplicationBootstrap {
             )
             WHERE id = OLD.appointment_id;
           END IF;
- 
-          RETURN NEW;
+      
+          RETURN NULL;
         END;
         $$ LANGUAGE plpgsql;
       `);
@@ -966,6 +1060,12 @@ export class DatabaseService implements OnApplicationBootstrap {
         name: 'idx_revenue_reports_month_year',
         table: 'revenue_reports',
         sql: 'CREATE INDEX idx_revenue_reports_month_year ON revenue_reports (month, year)',
+      },
+
+      {
+        name: 'idx_appointments_status',
+        table: 'appointments',
+        sql: 'CREATE INDEX idx_appointments_status ON appointments (appointment_status)',
       },
     ];
 

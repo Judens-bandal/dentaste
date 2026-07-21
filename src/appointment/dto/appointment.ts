@@ -10,7 +10,7 @@ import {
   IsBoolean,
   IsOptional,
 } from 'class-validator';
-import { EBranch } from '../enum/appointment';
+import { EAppointmentStatus, EBranch } from '../enum/appointment';
 import { Optional } from '@nestjs/common';
 import { IsCustomDate, IsFutureDate } from '../../../utils/common.helper';
 
@@ -42,8 +42,8 @@ export class CreateAppointmentDto {
   // (removed entirely, rather than kept optional, so it can never be set)
 
   @IsOptional()
-  @IsNumber()
-  noShow?: number;
+  @IsEnum(EAppointmentStatus)
+  appointmentStatus!: EAppointmentStatus;
 }
 export class UpdateAppointmentDto {
   @IsUUID()
@@ -73,7 +73,8 @@ export class UpdateAppointmentDto {
   balance?: number;
 
   @IsOptional()
-  noShow?: number;
+  @IsEnum(EAppointmentStatus)
+  appointmentStatus!: EAppointmentStatus;
 }
 
 export class GetAppointmentDto {
@@ -89,4 +90,12 @@ export class DeleteAppointmentDto {
 
   @IsString()
   id: string;
+}
+
+export class UpdateAppointmentStatusDto {
+  @IsUUID()
+  id: string;
+
+  @IsEnum(EAppointmentStatus)
+  appointmentStatus: EAppointmentStatus;
 }

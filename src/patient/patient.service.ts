@@ -62,6 +62,12 @@ export class PatientService {
       });
       await this.redis.set(cachekey, patient, PATIENT_TTL);
 
+      // void this.notificationHelper.notifyDoctors(
+      //   id,
+      //   EDoctorNotification.PATIENT_CREATED,
+      //   'All patients have been fetched.',
+      // );
+
       response.data = { code: 0, data: patient };
       response.code = HttpStatus.OK;
     } catch (error) {

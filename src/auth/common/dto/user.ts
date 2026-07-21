@@ -19,7 +19,7 @@ export class CreateUserDto {
   username: string;
 
   @IsString()
-  @MinLength(8)
+  @MinLength(5)
   password: string;
 
   // optional -> service defaults to ASSISTANT if omitted
