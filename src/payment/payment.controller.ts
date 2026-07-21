@@ -1,6 +1,6 @@
-import { Body, Controller, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, Req, Res } from '@nestjs/common';
 import { PaymentService } from './payment.service';
-import { CreatePaymentDto } from './dto/payment';
+import { CreatePaymentDto, GetTotalPaymentsDto } from './dto/payment';
 import type { ICustomRequest } from '../../utils/common.interface';
 import type { Response } from 'express';
 
@@ -15,5 +15,14 @@ export class PaymentController {
     @Res() res: Response,
   ) {
     return await this.paymentService.createPayment(dto, req, res);
+  }
+
+  @Get('/total')
+  async getTotalReceivedPayments(
+    @Query() dto: GetTotalPaymentsDto,
+    @Req() req: ICustomRequest,
+    @Res() res: Response,
+  ) {
+    return await this.paymentService.getTotalReceivedPayments(dto, req, res);
   }
 }

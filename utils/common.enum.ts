@@ -52,6 +52,7 @@ export enum ErrorCode {
   // ==============================
   INTERNAL_SERVER_ERROR = 500001,
   TOO_MANY_LOGIN_ATTEMPTS = 50002,
+  INVALID_DATE_RANGE = 50003,
 
   // ==============================
   // AUTHENTICATION (401000)

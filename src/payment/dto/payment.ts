@@ -10,6 +10,8 @@ import {
 } from 'class-validator';
 import { EPaymentMode } from '../enum/payment';
 import { Optional } from '@nestjs/common';
+import { EBranch } from '../../appointment/enum/appointment';
+import { IsCustomDate } from '../../../utils/common.helper';
 
 export class CreatePaymentDto {
   // @Optional()
@@ -51,4 +53,33 @@ export class UpdatePaymentDto {
   @IsOptional()
   @IsDateString()
   datePaid?: string;
+}
+
+// payments/dto/get-total-payments.dto.ts
+export class GetTotalPaymentsDto {
+  // @Optional()
+  // @IsUUID()
+  // id?: string;
+
+  @IsCustomDate()
+  dateFrom: string;
+
+  @IsCustomDate()
+  dateTo: string;
+
+  // used by getTotalReceivedPayments / getFullyPaidAppointmentsTotal to
+  // filter to one branch; IGNORED by getTotalReceivedByBranch, which
+  // always returns every branch broken down individually
+  @IsOptional()
+  @IsEnum(EBranch)
+  branch?: EBranch;
+}
+
+export class GetAnnualSummaryDto {
+  @IsUUID()
+  id: string;
+
+  @IsOptional()
+  @IsString()
+  year: string;
 }
