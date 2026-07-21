@@ -95,3 +95,53 @@ export interface IPatient {
 
   // appointments: Appointment[];
 }
+
+export interface IPayment {
+  id: string;
+  appointmentId: string;
+  patient: {
+    name: string;
+  };
+  balance: number;
+  mode: string;
+  amountPaid: number;
+  datePaid: string;
+  createdAt: string;
+}
+
+export interface ITotalReceivedPayments {
+  total_received: number;
+  transaction_count: number;
+  dateFrom: string;
+  dateTo: string;
+  branch: string;
+}
+
+export interface IFullyPaidAppointmentsTotal {
+  fully_paid_total: number;
+  appointment_count: number;
+  date_from: string;
+  date_to: string;
+  branch: string;
+}
+
+export interface IBranchTotalReceived {
+  branch: string;
+  total_received: number;
+  transaction_count: number;
+}
+
+export interface ITotalReceivedByBranch {
+  date_from: string;
+  date_to: string;
+  branches: IBranchTotalReceived[];
+  grand_total: number;
+}
+
+export interface IAnnualTotalReceived {
+  year: string;
+  branch: string;
+  is_current_year?: number;
+  total_received: number;
+  transaction_count: number;
+}

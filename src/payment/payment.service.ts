@@ -7,16 +7,35 @@ import { Payment } from './entity/payment';
 import { Appointment } from '../appointment/entity/appointment';
 import { Patient } from '../patient/entity/patient';
 
-import { ICustomRequest, IResponse } from '../../utils/common.interface';
+import {
+  IAnnualTotalReceived,
+  IBranchTotalReceived,
+  ICustomRequest,
+  IFullyPaidAppointmentsTotal,
+  IResponse,
+  ITotalReceivedByBranch,
+  ITotalReceivedPayments,
+} from '../../utils/common.interface';
 import { ErrorCode } from '../../utils/common.enum';
-import { expressResponse, extractUser } from '../../utils/common.helper';
+import {
+  expressResponse,
+  extractUser,
+  getYearDateRange,
+  rangeValidator,
+} from '../../utils/common.helper';
 import { appointmentKey, appointmentsKey } from '../redis/redis.keys';
 import { RedisCacheService } from '../redis/redis-cach.service';
 import {
   EDoctorNotification,
   NotificationHelper,
 } from '../notification/common/notification.helper';
-import { CreatePaymentDto } from './dto/payment';
+import {
+  CreatePaymentDto,
+  GetAnnualSummaryDto,
+  GetPaymentDto,
+  GetTotalPaymentsDto,
+} from './dto/payment';
+import { EBranch } from '../appointment/enum/appointment';
 
 @Injectable()
 export class PaymentService {
@@ -26,6 +45,9 @@ export class PaymentService {
 
     @InjectRepository(Patient, 'main_repo')
     private readonly patientRepository: Repository<Patient>,
+
+    @InjectRepository(Appointment, 'main_repo')
+    private readonly appointmentRepository: Repository<Appointment>,
 
     @InjectDataSource('main_repo')
     private readonly dataSource: DataSource,
@@ -145,4 +167,291 @@ export class PaymentService {
       expressResponse(res, response);
     }
   }
+
+  // ── Totals: single value, optionally filtered to one branch ────
+
+  async getTotalReceivedPayments(
+    dto: GetTotalPaymentsDto,
+    req: ICustomRequest,
+    res: Response,
+  ) {
+    const response: IResponse = { code: HttpStatus.ACCEPTED, data: null };
+
+    try {
+      const { id } = extractUser(req);
+      if (!id) {
+        response.data = { code: ErrorCode.MISSING_ID };
+        response.code = HttpStatus.BAD_REQUEST;
+        return;
+      }
+
+      if (!rangeValidator(dto.dateFrom, dto.dateTo)) {
+        response.data = {
+          code: ErrorCode.INVALID_DATE_RANGE,
+          message: '"dateFrom" must be on or before "dateTo".',
+        };
+        response.code = HttpStatus.BAD_REQUEST;
+        return;
+      }
+
+      const qb = this.paymentRepository
+        .createQueryBuilder('payment')
+        .innerJoin('payment.appointment', 'appointment')
+        .where('payment.date_paid BETWEEN :dateFrom AND :dateTo', {
+          dateFrom: dto.dateFrom,
+          dateTo: dto.dateTo,
+        });
+
+      if (dto.branch) {
+        qb.andWhere('appointment.branch = :branch', { branch: dto.branch });
+      }
+
+      const result = await qb
+        .select('SUM(payment.amount_paid)', 'total')
+        .addSelect('COUNT(payment.id)', 'count')
+        .getRawOne();
+
+      const data: ITotalReceivedPayments = {
+        total_received: Number(result.total) || 0,
+        transaction_count: Number(result.count) || 0,
+        dateFrom: dto.dateFrom,
+        dateTo: dto.dateTo,
+        branch: dto.branch ?? 'ALL',
+      };
+
+      response.data = { code: 0, data };
+      response.code = HttpStatus.OK;
+    } catch (error) {
+      console.error('Error calculating total received payments:', error);
+
+      if (error instanceof HttpException) {
+        const errorResponse = error.getResponse();
+        response.data =
+          typeof errorResponse === 'string'
+            ? { message: errorResponse }
+            : (errorResponse as Record<string, any>);
+        response.code = error.getStatus();
+      } else {
+        response.data = { code: ErrorCode.INTERNAL_SERVER_ERROR };
+        response.code = HttpStatus.INTERNAL_SERVER_ERROR;
+      }
+    } finally {
+      expressResponse(res, response);
+    }
+  }
+
+  // ── Totals: fully-settled appointments only (secondary metric) ─
+
+  //   async getFullyPaidAppointmentsTotal(
+  //     dto: GetTotalPaymentsDto,
+  //     req: ICustomRequest,
+  //     res: Response,
+  //   ) {
+  //     const response: IResponse = { code: HttpStatus.ACCEPTED, data: null };
+
+  //     try {
+  //       const { id } = extractUser(req);
+  //       if (!id) {
+  //         response.data = { code: ErrorCode.MISSING_ID };
+  //         response.code = HttpStatus.BAD_REQUEST;
+  //         return;
+  //       }
+
+  //       if (!rangeValidator(dto.dateFrom, dto.dateTo)) {
+  //         response.data = {
+  //           code: ErrorCode.INVALID_DATE_RANGE,
+  //           message: '"dateFrom" must be on or before "dateTo".',
+  //         };
+  //         response.code = HttpStatus.BAD_REQUEST;
+  //         return;
+  //       }
+
+  //       const qb = this.appointmentRepository
+  //         .createQueryBuilder('appointment')
+  //         .where('appointment.scheduled_at BETWEEN :dateFrom AND :dateTo', {
+  //           dateFrom: dto.dateFrom,
+  //           dateTo: dto.dateTo,
+  //         })
+  //         .andWhere('appointment.balance <= 0');
+
+  //       if (dto.branch) {
+  //         qb.andWhere('appointment.branch = :branch', { branch: dto.branch });
+  //       }
+
+  //       const result = await qb
+  //         .select('SUM(appointment.debit_amount)', 'total')
+  //         .addSelect('COUNT(appointment.id)', 'count')
+  //         .getRawOne();
+
+  //       const data: IFullyPaidAppointmentsTotal = {
+  //         fully_paid_total: Number(result.total) || 0,
+  //         appointment_count: Number(result.count) || 0,
+  //         date_from: dto.dateFrom,
+  //         date_to: dto.dateTo,
+  //         branch: dto.branch ?? 'ALL',
+  //       };
+
+  //       response.data = { code: 0, data };
+  //       response.code = HttpStatus.OK;
+  //     } catch (error) {
+  //       console.error('Error calculating fully-paid appointments total:', error);
+
+  //       if (error instanceof HttpException) {
+  //         const errorResponse = error.getResponse();
+  //         response.data =
+  //           typeof errorResponse === 'string'
+  //             ? { message: errorResponse }
+  //             : (errorResponse as Record<string, any>);
+  //         response.code = error.getStatus();
+  //       } else {
+  //         response.data = { code: ErrorCode.INTERNAL_SERVER_ERROR };
+  //         response.code = HttpStatus.INTERNAL_SERVER_ERROR;
+  //       }
+  //     } finally {
+  //       expressResponse(res, response);
+  //     }
+  //   }
+
+  // ── Totals: broken down per branch for the same date range ─────
+
+  //   async getTotalReceivedByBranch(
+  //     dto: GetTotalPaymentsDto, // dto.branch is ignored here — always returns ALL branches
+  //     req: ICustomRequest,
+  //     res: Response,
+  //   ) {
+  //     const response: IResponse = { code: HttpStatus.ACCEPTED, data: null };
+
+  //     try {
+  //       const { id } = extractUser(req);
+  //       if (!id) {
+  //         response.data = { code: ErrorCode.MISSING_ID };
+  //         response.code = HttpStatus.BAD_REQUEST;
+  //         return;
+  //       }
+
+  //       if (!rangeValidator(dto.dateFrom, dto.dateTo)) {
+  //         response.data = {
+  //           code: ErrorCode.INVALID_DATE_RANGE,
+  //           message: '"dateFrom" must be on or before "dateTo".',
+  //         };
+  //         response.code = HttpStatus.BAD_REQUEST;
+  //         return;
+  //       }
+
+  //       const rows = await this.paymentRepository
+  //         .createQueryBuilder('payment')
+  //         .innerJoin('payment.appointment', 'appointment')
+  //         .where('payment.date_paid BETWEEN :dateFrom AND :dateTo', {
+  //           date_from: dto.dateFrom,
+  //           date_to: dto.dateTo,
+  //         })
+  //         .select('appointment.branch', 'branch')
+  //         .addSelect('SUM(payment.amount_paid)', 'total')
+  //         .addSelect('COUNT(payment.id)', 'count')
+  //         .groupBy('appointment.branch')
+  //         .getRawMany();
+
+  //       const branches: IBranchTotalReceived[] = rows.map((row) => ({
+  //         branch: row.branch,
+  //         total_received: Number(row.total) || 0,
+  //         transaction_count: Number(row.count) || 0,
+  //       }));
+
+  //       const grand_total = branches.reduce(
+  //         (sum, b) => sum + b.total_received,
+  //         0,
+  //       );
+
+  //       const data: ITotalReceivedByBranch = {
+  //         date_from: dto.dateFrom,
+  //         date_to: dto.dateTo,
+  //         branches,
+  //         grand_total,
+  //       };
+
+  //       response.data = { code: 0, data };
+  //       response.code = HttpStatus.OK;
+  //     } catch (error) {
+  //       console.error('Error calculating total received by branch:', error);
+
+  //       if (error instanceof HttpException) {
+  //         const errorResponse = error.getResponse();
+  //         response.data =
+  //           typeof errorResponse === 'string'
+  //             ? { message: errorResponse }
+  //             : (errorResponse as Record<string, any>);
+  //         response.code = error.getStatus();
+  //       } else {
+  //         response.data = { code: ErrorCode.INTERNAL_SERVER_ERROR };
+  //         response.code = HttpStatus.INTERNAL_SERVER_ERROR;
+  //       }
+  //     } finally {
+  //       expressResponse(res, response);
+  //     }
+  //   }
+
+  //   async getAnnualTotalReceived(
+  //     dto: GetAnnualSummaryDto & { branch?: EBranch },
+  //     req: ICustomRequest,
+  //     res: Response,
+  //   ) {
+  //     const response: IResponse = { code: HttpStatus.ACCEPTED, data: null };
+
+  //     try {
+  //       const { id } = extractUser(req, dto);
+  //       if (!id) {
+  //         response.data = { code: ErrorCode.MISSING_ID };
+  //         response.code = HttpStatus.BAD_REQUEST;
+  //         return;
+  //       }
+
+  //       const { year, is_current_year, start_date, end_date } = getYearDateRange(
+  //         dto.year,
+  //       );
+
+  //       const qb = this.paymentRepository
+  //         .createQueryBuilder('payment')
+  //         .innerJoin('payment.appointment', 'appointment')
+  //         .where('payment.date_paid BETWEEN :startDate AND :endDate', {
+  //           start_date,
+  //           end_date,
+  //         });
+
+  //       if (dto.branch) {
+  //         qb.andWhere('appointment.branch = :branch', { branch: dto.branch });
+  //       }
+
+  //       const result = await qb
+  //         .select('SUM(payment.amount_paid)', 'total')
+  //         .addSelect('COUNT(payment.id)', 'count')
+  //         .getRawOne();
+
+  //       const data: IAnnualTotalReceived = {
+  //         year: String(year),
+  //         branch: dto.branch ?? 'ALL',
+  //         is_current_year,
+  //         total_received: Number(result.total) || 0,
+  //         transaction_count: Number(result.count) || 0,
+  //       };
+
+  //       response.data = { code: 0, data };
+  //       response.code = HttpStatus.OK;
+  //     } catch (error) {
+  //       console.error('Error calculating annual total received:', error);
+
+  //       if (error instanceof HttpException) {
+  //         const errorResponse = error.getResponse();
+  //         response.data =
+  //           typeof errorResponse === 'string'
+  //             ? { message: errorResponse }
+  //             : (errorResponse as Record<string, any>);
+  //         response.code = error.getStatus();
+  //       } else {
+  //         response.data = { code: ErrorCode.INTERNAL_SERVER_ERROR };
+  //         response.code = HttpStatus.INTERNAL_SERVER_ERROR;
+  //       }
+  //     } finally {
+  //       expressResponse(res, response);
+  //     }
+  //   }
 }

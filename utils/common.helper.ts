@@ -8,7 +8,7 @@ import { ICustomRequest, IResponse } from './common.interface.js';
 import { Response } from 'express';
 import { ERole, ErrorCode } from './common.enum.js';
 import { BadRequestException } from '@nestjs/common';
-import { EBranch } from '../src/appointment/enum/appointment.js';
+import { EBranch, EStatus } from '../src/appointment/enum/appointment.js';
 import { Repository } from 'typeorm';
 import { Appointment } from '../src/appointment/entity/appointment.js';
 import {
@@ -411,3 +411,65 @@ export async function assertNoPatientScheduleConflict(
     });
   }
 }
+
+export function rangeValidator(
+  from: Date | string | null,
+  to: Date | string | null,
+): boolean {
+  if (!from || !to) return true; // nothing to validate if either side is missing
+
+  const fromDate = new Date(from);
+  const toDate = new Date(to);
+
+  // explicitly reject invalid dates instead of relying on NaN comparisons
+  // silently evaluating to false — this makes the failure reason clear
+  // if you ever add validation error messages downstream
+  if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {
+    return false;
+  }
+
+  return fromDate <= toDate;
+}
+
+// add to common.helper.ts, near parseToDatabaseDate
+
+export interface IYearDateRange {
+  year: string;
+  is_current_year: EStatus;
+  start_date: string;
+  end_date: string;
+}
+
+/**
+ * Resolves a target year (defaulting to the current year if omitted) into
+ * a start/end date range, capping endDate at TODAY instead of Dec 31 when
+ * the target year is the current one.
+ */
+export function getYearDateRange(year?: string): IYearDateRange {
+  const now = new Date();
+
+  // Always ensure the resolved year is a string
+  const currentYear = String(extractYear(now));
+  const resolvedYear = year ?? currentYear;
+
+  const isCurrentYear = resolvedYear === currentYear;
+
+  const start_date = parseToDatabaseDate(`${resolvedYear}-01-01`) as string;
+  const end_date = isCurrentYear
+    ? (parseToDatabaseDate(now.toISOString()) as string)
+    : (parseToDatabaseDate(`${resolvedYear}-12-31`) as string);
+
+  return {
+    year: resolvedYear,
+    is_current_year: isCurrentYear ? EStatus.ACTIVE : EStatus.INACTIVE,
+    start_date,
+    end_date,
+  };
+}
+
+export const extractYear = (input: string | Date): number => {
+  if (typeof input === 'string') {
+    return Number(input.slice(0, 4));
+  }
+  return input.getUTCFullYear();
+};
