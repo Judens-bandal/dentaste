@@ -69,6 +69,8 @@ export interface IAppointments {
     name: string;
     cellphoneNumber: string;
     address: string;
+    occupation: string;
+    age: number;
   };
   branch: string;
   treatmentDone: string;
