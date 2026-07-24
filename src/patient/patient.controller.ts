@@ -28,8 +28,8 @@ export class PatientController {
   constructor(private readonly patientService: PatientService) {}
 
   @Get()
+  @Roles(ERole.DOCTOR, ERole.ASSISTANT)
   @Permission(EPermissions.VIEW_PATIENTS)
-  // @Roles(ERole.DOCTOR, ERole.ASSISTANT)
   async getAllPatients(
     @Query() dto: GetPatientDto,
     @Req() req: ICustomRequest,
@@ -39,6 +39,7 @@ export class PatientController {
   }
 
   @Post('/create')
+  @Roles(ERole.DOCTOR, ERole.ASSISTANT)
   @Permission(EPermissions.MANAGE_PATIENTS)
   async createPatient(
     @Body() dto: CreatePatientDto,
@@ -49,6 +50,7 @@ export class PatientController {
   }
 
   @Put('/update')
+  @Roles(ERole.DOCTOR, ERole.ASSISTANT)
   @Permission(EPermissions.MANAGE_PATIENTS)
   async updatePatient(
     @Body() dto: UpdatePatientDto,
@@ -59,6 +61,7 @@ export class PatientController {
   }
 
   @Delete('/delete')
+  @Roles(ERole.DOCTOR, ERole.ASSISTANT)
   @Permission(EPermissions.MANAGE_PATIENTS)
   async deletePatient(
     @Query() dto: GetPatientDto,

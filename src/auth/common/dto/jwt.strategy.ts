@@ -57,7 +57,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ErrorCode } from '../../../../utils/common.enum';
 import { userKey } from '../../../redis/redis.keys';
 import { RedisCacheService } from '../../../redis/redis-cach.service';
-import { USER_TTL } from '../../../redis/redis.ttl';
+import { USER_PROFILE_TTL } from '../../../redis/redis.ttl';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -94,7 +94,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     // populate the cache so the NEXT request is a hit, not another DB round-trip
-    await this.redis.set(cacheKey, user, USER_TTL);
+    await this.redis.set(cacheKey, user, USER_PROFILE_TTL);
 
     return user;
   }

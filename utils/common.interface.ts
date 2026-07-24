@@ -97,16 +97,20 @@ export interface IPatient {
 }
 
 export interface IPayment {
-  id: string;
-  appointmentId: string;
-  patient: {
-    name: string;
+  // id: string;
+  appointment: {
+    treatmentDone: string;
+    branch: string;
+    patient: {
+      name: string;
+      cellphoneNumber: string;
+      address: string;
+    };
   };
-  balance: number;
   mode: string;
-  amountPaid: number;
-  datePaid: string;
-  createdAt: string;
+  amo_paid: number;
+  dat_paid: string;
+  cre_at: string;
 }
 
 export interface ITotalReceivedPayments {

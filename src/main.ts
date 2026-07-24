@@ -11,7 +11,21 @@ import {
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-
+  const cors = {
+    origin: ['https://dentaste-fe.vercel.app', 'http://localhost:3000'],
+    // origin: 'http://localhost:3000',
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true,
+    // exposedHeaders: ['x-auth-token']
+    // allowedHeaders: ['Content-Type'],
+    // allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'ngrok-skip-browser-warning',
+    ],
+  };
+  app.enableCors(cors);
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

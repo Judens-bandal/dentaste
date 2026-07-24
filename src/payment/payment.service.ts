@@ -12,6 +12,8 @@ import {
   IBranchTotalReceived,
   ICustomRequest,
   IFullyPaidAppointmentsTotal,
+  IPatient,
+  IPayment,
   IResponse,
   ITotalReceivedByBranch,
   ITotalReceivedPayments,
@@ -20,10 +22,16 @@ import { ErrorCode } from '../../utils/common.enum';
 import {
   expressResponse,
   extractUser,
+  formatDateTime,
   getYearDateRange,
   rangeValidator,
 } from '../../utils/common.helper';
-import { appointmentKey, appointmentsKey } from '../redis/redis.keys';
+import {
+  appointmentKey,
+  appointmentsKey,
+  paymentsKey,
+  totalReceivedKey,
+} from '../redis/redis.keys';
 import { RedisCacheService } from '../redis/redis-cach.service';
 import {
   EDoctorNotification,
@@ -36,6 +44,7 @@ import {
   GetTotalPaymentsDto,
 } from './dto/payment';
 import { EBranch } from '../appointment/enum/appointment';
+import { PATIENT_TTL, PAYMENTS_TTL } from '../redis/redis.ttl';
 
 @Injectable()
 export class PaymentService {
@@ -46,15 +55,124 @@ export class PaymentService {
     @InjectRepository(Patient, 'main_repo')
     private readonly patientRepository: Repository<Patient>,
 
-    @InjectRepository(Appointment, 'main_repo')
-    private readonly appointmentRepository: Repository<Appointment>,
-
     @InjectDataSource('main_repo')
     private readonly dataSource: DataSource,
 
     private readonly redis: RedisCacheService,
     private readonly notificationHelper: NotificationHelper,
   ) {}
+
+  // async createPayment(
+  //   dto: CreatePaymentDto,
+  //   req: ICustomRequest,
+  //   res: Response,
+  // ) {
+  //   const response: IResponse = { code: HttpStatus.ACCEPTED, data: null };
+  //   const queryRunner = this.dataSource.createQueryRunner();
+
+  //   try {
+  //     const { id } = extractUser(req);
+  //     if (!id) {
+  //       response.data = { code: ErrorCode.MISSING_ID };
+  //       response.code = HttpStatus.BAD_REQUEST;
+  //       return;
+  //     }
+
+  //     await queryRunner.connect();
+  //     await queryRunner.startTransaction();
+
+  //     try {
+  //       // pessimistic_write locks this appointment row until commit/rollback —
+  //       // if two payments for the SAME appointment arrive at nearly the same
+  //       // instant, the second one blocks here until the first transaction
+  //       // finishes, so it re-reads the balance AFTER the first payment
+  //       // actually landed, instead of both racing off a stale read.
+  //       const appointment = await queryRunner.manager.findOne(Appointment, {
+  //         where: { id: dto.appointmentId },
+  //         lock: { mode: 'pessimistic_write' },
+  //       });
+
+  //       if (!appointment) {
+  //         await queryRunner.rollbackTransaction();
+  //         response.data = { code: ErrorCode.APPOINTMENT_NOT_FOUND };
+  //         response.code = HttpStatus.NOT_FOUND;
+  //         return;
+  //       }
+
+  //       const currentBalance = Number(appointment.balance);
+
+  //       if (dto.amountPaid > currentBalance) {
+  //         await queryRunner.rollbackTransaction();
+  //         response.data = {
+  //           code: ErrorCode.PAYMENT_EXCEEDS_BALANCE,
+  //           message: `Payment of ${dto.amountPaid} exceeds the remaining balance of ${currentBalance}.`,
+  //         };
+  //         response.code = HttpStatus.BAD_REQUEST;
+  //         return;
+  //       }
+
+  //       const payment = queryRunner.manager.create(Payment, {
+  //         appointmentId: dto.appointmentId,
+  //         mode: dto.mode,
+  //         amountPaid: dto.amountPaid,
+  //         datePaid: dto.datePaid,
+  //       });
+
+  //       const saved = await queryRunner.manager.save(payment);
+  //       // trg_payments_recalc_balance fires here, inside this same
+  //       // transaction, recalculating appointments.balance before commit
+
+  //       await queryRunner.commitTransaction();
+
+  //       // cache invalidation happens AFTER commit — otherwise a request
+  //       // hitting the cache mid-transaction could re-populate it with the
+  //       // pre-payment balance before the commit actually lands
+  //       await this.redis.del(appointmentKey(dto.appointmentId));
+  //       await this.redis.del(appointmentsKey());
+
+  //       const patient = await this.patientRepository.findOne({
+  //         where: { id: appointment.patientId },
+  //         select: { name: true },
+  //       });
+
+  //       void this.notificationHelper.notifyDoctors(
+  //         EDoctorNotification.PAYMENT_RECEIVED,
+  //         `Payment of ${dto.amountPaid} (${dto.mode}) received for ${patient?.name ?? 'a patient'}.`,
+  //         {
+  //           // appointmentId: dto.appointmentId,
+  //           amountPaid: dto.amountPaid,
+  //           mode: dto.mode,
+  //           patientName: patient?.name,
+  //         },
+  //       );
+
+  //       response.data = { code: 0, data: saved };
+  //       response.code = HttpStatus.CREATED;
+  //     } catch (innerError) {
+  //       if (queryRunner.isTransactionActive) {
+  //         await queryRunner.rollbackTransaction();
+  //       }
+  //       throw innerError;
+  //     }
+  //   } catch (error) {
+  //     console.error('Error creating payment:', error);
+
+  //     if (error instanceof HttpException) {
+  //       const errorResponse = error.getResponse();
+  //       response.data =
+  //         typeof errorResponse === 'string'
+  //           ? { message: errorResponse }
+  //           : (errorResponse as Record<string, any>);
+  //       response.code = error.getStatus();
+  //     } else {
+  //       response.data = { code: ErrorCode.INTERNAL_SERVER_ERROR };
+  //       response.code = HttpStatus.INTERNAL_SERVER_ERROR;
+  //     }
+  //   } finally {
+  //     await queryRunner.release();
+  //     expressResponse(res, response);
+  //   }
+  // }
 
   async createPayment(
     dto: CreatePaymentDto,
@@ -120,9 +238,13 @@ export class PaymentService {
 
         // cache invalidation happens AFTER commit — otherwise a request
         // hitting the cache mid-transaction could re-populate it with the
-        // pre-payment balance before the commit actually lands
+        // pre-payment balance before the commit actually lands.
+        // paymentsKey() was previously missing here — without it, getPayments()
+        // would keep serving a stale list (missing this new payment) until
+        // PAYMENTS_TTL expired naturally.
         await this.redis.del(appointmentKey(dto.appointmentId));
         await this.redis.del(appointmentsKey());
+        await this.redis.del(paymentsKey());
 
         const patient = await this.patientRepository.findOne({
           where: { id: appointment.patientId },
@@ -133,7 +255,7 @@ export class PaymentService {
           EDoctorNotification.PAYMENT_RECEIVED,
           `Payment of ${dto.amountPaid} (${dto.mode}) received for ${patient?.name ?? 'a patient'}.`,
           {
-            // appointmentId: dto.appointmentId,
+            appointmentId: dto.appointmentId,
             amountPaid: dto.amountPaid,
             mode: dto.mode,
             patientName: patient?.name,
@@ -168,7 +290,161 @@ export class PaymentService {
     }
   }
 
+  async getPayments(dto: GetPaymentDto, req: ICustomRequest, res: Response) {
+    const response: IResponse = { code: HttpStatus.ACCEPTED, data: null };
+
+    try {
+      const { id } = extractUser(req);
+      if (!id) {
+        response.data = { code: ErrorCode.MISSING_ID };
+        response.code = HttpStatus.BAD_REQUEST;
+        return;
+      }
+
+      const cachekey = paymentsKey();
+      const cacheData = await this.redis.get<IPayment[]>(cachekey);
+      if (cacheData) {
+        response.code = HttpStatus.OK;
+        response.data = { code: 0, data: cacheData };
+        return;
+      }
+
+      const payments = await this.paymentRepository.find({
+        relations: {
+          appointment: {
+            patient: true,
+          },
+        },
+        select: {
+          mode: true,
+          amountPaid: true,
+          datePaid: true,
+          createdAt: true,
+          appointment: {
+            treatmentDone: true,
+            branch: true,
+            patient: {
+              name: true,
+              cellphoneNumber: true,
+              address: true,
+            },
+          },
+        },
+        order: { createdAt: 'DESC' },
+      });
+
+      const data: IPayment[] = [];
+
+      for (const payment of payments) {
+        data.push({
+          // id: payment.id ?? null,
+          appointment: {
+            treatmentDone: payment.appointment?.treatmentDone ?? null,
+            branch: payment.appointment?.branch ?? null,
+            patient: {
+              name: payment.appointment?.patient?.name ?? null,
+              cellphoneNumber:
+                payment.appointment?.patient?.cellphoneNumber ?? null,
+              address: payment.appointment?.patient?.address ?? null,
+            },
+          },
+          mode: payment.mode,
+          amo_paid: Number(payment.amountPaid),
+          dat_paid: payment.datePaid,
+          cre_at: formatDateTime(payment.createdAt),
+        });
+      }
+      await this.redis.set(cachekey, data, PAYMENTS_TTL);
+      response.code = HttpStatus.OK;
+      response.data = { code: 0, data: data };
+    } catch (error) {
+      response.data = { code: ErrorCode.INTERNAL_SERVER_ERROR };
+      response.code = HttpStatus.INTERNAL_SERVER_ERROR;
+    } finally {
+      expressResponse(res, response);
+    }
+  }
   // ── Totals: single value, optionally filtered to one branch ────
+
+  // async getTotalReceivedPayments(
+  //   dto: GetTotalPaymentsDto,
+  //   req: ICustomRequest,
+  //   res: Response,
+  // ) {
+  //   const response: IResponse = { code: HttpStatus.ACCEPTED, data: null };
+
+  //   try {
+  //     const { id } = extractUser(req);
+  //     if (!id) {
+  //       response.data = { code: ErrorCode.MISSING_ID };
+  //       response.code = HttpStatus.BAD_REQUEST;
+  //       return;
+  //     }
+
+  //     if (!rangeValidator(dto.dateFrom, dto.dateTo)) {
+  //       response.data = {
+  //         code: ErrorCode.INVALID_DATE_RANGE,
+  //         message: '"dateFrom" must be on or before "dateTo".',
+  //       };
+  //       response.code = HttpStatus.BAD_REQUEST;
+  //       return;
+  //     }
+  //     // const cachekey = summarytotalKey();
+  //     // const cacheData = await this.redis.get<Payment[]>(cachekey);
+  //     // if (cacheData) {
+  //     //   response.data = { code: 0, data: cacheData };
+  //     //   response.code = HttpStatus.OK;
+  //     //   return;
+  //     // }
+
+  //     const qb = this.paymentRepository
+  //       .createQueryBuilder('payment')
+  //       .innerJoin('payment.appointment', 'appointment')
+  //       .where('payment.date_paid BETWEEN :dateFrom AND :dateTo', {
+  //         dateFrom: dto.dateFrom,
+  //         dateTo: dto.dateTo,
+  //       });
+
+  //     if (dto.branch) {
+  //       qb.andWhere('appointment.branch = :branch', { branch: dto.branch });
+  //     }
+
+  //     const result = await qb
+  //       .select('SUM(payment.amount_paid)', 'total')
+  //       .addSelect('COUNT(payment.id)', 'count')
+  //       .getRawOne();
+
+  //     const data: ITotalReceivedPayments = {
+  //       total_received: Number(result.total) || 0,
+  //       transaction_count: Number(result.count) || 0,
+  //       dateFrom: dto.dateFrom,
+  //       dateTo: dto.dateTo,
+  //       branch: dto.branch ?? 'ALL',
+  //     };
+
+  //     // await this.redis.set(cachekey, data, PATIENT_TTL);
+  //     response.data = { code: 0, data };
+  //     response.code = HttpStatus.OK;
+  //   } catch (error) {
+  //     console.error('Error calculating total received payments:', error);
+
+  //     if (error instanceof HttpException) {
+  //       const errorResponse = error.getResponse();
+  //       response.data =
+  //         typeof errorResponse === 'string'
+  //           ? { message: errorResponse }
+  //           : (errorResponse as Record<string, any>);
+  //       response.code = error.getStatus();
+  //     } else {
+  //       response.data = { code: ErrorCode.INTERNAL_SERVER_ERROR };
+  //       response.code = HttpStatus.INTERNAL_SERVER_ERROR;
+  //     }
+  //   } finally {
+  //     expressResponse(res, response);
+  //   }
+  // }
+
+  //////
 
   async getTotalReceivedPayments(
     dto: GetTotalPaymentsDto,
@@ -191,6 +467,14 @@ export class PaymentService {
           message: '"dateFrom" must be on or before "dateTo".',
         };
         response.code = HttpStatus.BAD_REQUEST;
+        return;
+      }
+
+      const cachekey = totalReceivedKey(dto.dateFrom, dto.dateTo, dto.branch);
+      const cacheData = await this.redis.get<ITotalReceivedPayments>(cachekey);
+      if (cacheData) {
+        response.data = { code: 0, data: cacheData };
+        response.code = HttpStatus.OK;
         return;
       }
 
@@ -219,6 +503,14 @@ export class PaymentService {
         branch: dto.branch ?? 'ALL',
       };
 
+      // range that includes today/future -> short TTL, since numbers can
+      // still change as new payments land; a fully past range is safe to
+      // cache much longer, since that history is settled
+      const today = new Date().toISOString().split('T')[0];
+      const isOngoingRange = dto.dateTo >= today;
+      const ttl = isOngoingRange ? 60 : PAYMENTS_TTL; // 1 min vs your normal TTL
+
+      await this.redis.set(cachekey, data, ttl);
       response.data = { code: 0, data };
       response.code = HttpStatus.OK;
     } catch (error) {
@@ -240,218 +532,16 @@ export class PaymentService {
     }
   }
 
-  // ── Totals: fully-settled appointments only (secondary metric) ─
-
-  //   async getFullyPaidAppointmentsTotal(
-  //     dto: GetTotalPaymentsDto,
-  //     req: ICustomRequest,
-  //     res: Response,
-  //   ) {
-  //     const response: IResponse = { code: HttpStatus.ACCEPTED, data: null };
-
-  //     try {
-  //       const { id } = extractUser(req);
-  //       if (!id) {
-  //         response.data = { code: ErrorCode.MISSING_ID };
-  //         response.code = HttpStatus.BAD_REQUEST;
-  //         return;
-  //       }
-
-  //       if (!rangeValidator(dto.dateFrom, dto.dateTo)) {
-  //         response.data = {
-  //           code: ErrorCode.INVALID_DATE_RANGE,
-  //           message: '"dateFrom" must be on or before "dateTo".',
-  //         };
-  //         response.code = HttpStatus.BAD_REQUEST;
-  //         return;
-  //       }
-
-  //       const qb = this.appointmentRepository
-  //         .createQueryBuilder('appointment')
-  //         .where('appointment.scheduled_at BETWEEN :dateFrom AND :dateTo', {
-  //           dateFrom: dto.dateFrom,
-  //           dateTo: dto.dateTo,
-  //         })
-  //         .andWhere('appointment.balance <= 0');
-
-  //       if (dto.branch) {
-  //         qb.andWhere('appointment.branch = :branch', { branch: dto.branch });
-  //       }
-
-  //       const result = await qb
-  //         .select('SUM(appointment.debit_amount)', 'total')
-  //         .addSelect('COUNT(appointment.id)', 'count')
-  //         .getRawOne();
-
-  //       const data: IFullyPaidAppointmentsTotal = {
-  //         fully_paid_total: Number(result.total) || 0,
-  //         appointment_count: Number(result.count) || 0,
-  //         date_from: dto.dateFrom,
-  //         date_to: dto.dateTo,
-  //         branch: dto.branch ?? 'ALL',
-  //       };
-
-  //       response.data = { code: 0, data };
-  //       response.code = HttpStatus.OK;
-  //     } catch (error) {
-  //       console.error('Error calculating fully-paid appointments total:', error);
-
-  //       if (error instanceof HttpException) {
-  //         const errorResponse = error.getResponse();
-  //         response.data =
-  //           typeof errorResponse === 'string'
-  //             ? { message: errorResponse }
-  //             : (errorResponse as Record<string, any>);
-  //         response.code = error.getStatus();
-  //       } else {
-  //         response.data = { code: ErrorCode.INTERNAL_SERVER_ERROR };
-  //         response.code = HttpStatus.INTERNAL_SERVER_ERROR;
-  //       }
-  //     } finally {
-  //       expressResponse(res, response);
-  //     }
-  //   }
-
-  // ── Totals: broken down per branch for the same date range ─────
-
-  //   async getTotalReceivedByBranch(
-  //     dto: GetTotalPaymentsDto, // dto.branch is ignored here — always returns ALL branches
-  //     req: ICustomRequest,
-  //     res: Response,
-  //   ) {
-  //     const response: IResponse = { code: HttpStatus.ACCEPTED, data: null };
-
-  //     try {
-  //       const { id } = extractUser(req);
-  //       if (!id) {
-  //         response.data = { code: ErrorCode.MISSING_ID };
-  //         response.code = HttpStatus.BAD_REQUEST;
-  //         return;
-  //       }
-
-  //       if (!rangeValidator(dto.dateFrom, dto.dateTo)) {
-  //         response.data = {
-  //           code: ErrorCode.INVALID_DATE_RANGE,
-  //           message: '"dateFrom" must be on or before "dateTo".',
-  //         };
-  //         response.code = HttpStatus.BAD_REQUEST;
-  //         return;
-  //       }
-
-  //       const rows = await this.paymentRepository
-  //         .createQueryBuilder('payment')
-  //         .innerJoin('payment.appointment', 'appointment')
-  //         .where('payment.date_paid BETWEEN :dateFrom AND :dateTo', {
-  //           date_from: dto.dateFrom,
-  //           date_to: dto.dateTo,
-  //         })
-  //         .select('appointment.branch', 'branch')
-  //         .addSelect('SUM(payment.amount_paid)', 'total')
-  //         .addSelect('COUNT(payment.id)', 'count')
-  //         .groupBy('appointment.branch')
-  //         .getRawMany();
-
-  //       const branches: IBranchTotalReceived[] = rows.map((row) => ({
-  //         branch: row.branch,
-  //         total_received: Number(row.total) || 0,
-  //         transaction_count: Number(row.count) || 0,
-  //       }));
-
-  //       const grand_total = branches.reduce(
-  //         (sum, b) => sum + b.total_received,
-  //         0,
-  //       );
-
-  //       const data: ITotalReceivedByBranch = {
-  //         date_from: dto.dateFrom,
-  //         date_to: dto.dateTo,
-  //         branches,
-  //         grand_total,
-  //       };
-
-  //       response.data = { code: 0, data };
-  //       response.code = HttpStatus.OK;
-  //     } catch (error) {
-  //       console.error('Error calculating total received by branch:', error);
-
-  //       if (error instanceof HttpException) {
-  //         const errorResponse = error.getResponse();
-  //         response.data =
-  //           typeof errorResponse === 'string'
-  //             ? { message: errorResponse }
-  //             : (errorResponse as Record<string, any>);
-  //         response.code = error.getStatus();
-  //       } else {
-  //         response.data = { code: ErrorCode.INTERNAL_SERVER_ERROR };
-  //         response.code = HttpStatus.INTERNAL_SERVER_ERROR;
-  //       }
-  //     } finally {
-  //       expressResponse(res, response);
-  //     }
-  //   }
-
-  //   async getAnnualTotalReceived(
-  //     dto: GetAnnualSummaryDto & { branch?: EBranch },
-  //     req: ICustomRequest,
-  //     res: Response,
-  //   ) {
-  //     const response: IResponse = { code: HttpStatus.ACCEPTED, data: null };
-
-  //     try {
-  //       const { id } = extractUser(req, dto);
-  //       if (!id) {
-  //         response.data = { code: ErrorCode.MISSING_ID };
-  //         response.code = HttpStatus.BAD_REQUEST;
-  //         return;
-  //       }
-
-  //       const { year, is_current_year, start_date, end_date } = getYearDateRange(
-  //         dto.year,
-  //       );
-
-  //       const qb = this.paymentRepository
-  //         .createQueryBuilder('payment')
-  //         .innerJoin('payment.appointment', 'appointment')
-  //         .where('payment.date_paid BETWEEN :startDate AND :endDate', {
-  //           start_date,
-  //           end_date,
-  //         });
-
-  //       if (dto.branch) {
-  //         qb.andWhere('appointment.branch = :branch', { branch: dto.branch });
-  //       }
-
-  //       const result = await qb
-  //         .select('SUM(payment.amount_paid)', 'total')
-  //         .addSelect('COUNT(payment.id)', 'count')
-  //         .getRawOne();
-
-  //       const data: IAnnualTotalReceived = {
-  //         year: String(year),
-  //         branch: dto.branch ?? 'ALL',
-  //         is_current_year,
-  //         total_received: Number(result.total) || 0,
-  //         transaction_count: Number(result.count) || 0,
-  //       };
-
-  //       response.data = { code: 0, data };
-  //       response.code = HttpStatus.OK;
-  //     } catch (error) {
-  //       console.error('Error calculating annual total received:', error);
-
-  //       if (error instanceof HttpException) {
-  //         const errorResponse = error.getResponse();
-  //         response.data =
-  //           typeof errorResponse === 'string'
-  //             ? { message: errorResponse }
-  //             : (errorResponse as Record<string, any>);
-  //         response.code = error.getStatus();
-  //       } else {
-  //         response.data = { code: ErrorCode.INTERNAL_SERVER_ERROR };
-  //         response.code = HttpStatus.INTERNAL_SERVER_ERROR;
-  //       }
-  //     } finally {
-  //       expressResponse(res, response);
-  //     }
-  //   }
+  // this method takes NO req/res — it's cron-safe, writes straight to Redis
+  async refreshPaymentsCache(): Promise<void> {
+    try {
+      const payments = await this.paymentRepository.find({
+        /* same query as getPayments */
+      });
+      // ...build data array...
+      await this.redis.set(paymentsKey(), payments, PAYMENTS_TTL);
+    } catch (error) {
+      console.error('Error refreshing payments cache via cron:', error);
+    }
+  }
 }

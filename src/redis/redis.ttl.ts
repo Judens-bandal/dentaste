@@ -1,7 +1,8 @@
-export const PATIENT_TTL = 300; // 5 min
-export const APPIONMENT_TTL = 300; // 5 min
-export const USER_TTL = 600; // 10 min
-export const SESSION_TTL = 3600; // 1 hr — should match your JWT expiry
-export const OTP_TTL = 120;
-export const refreshTokenTTL = 60 * 60 * 24 * 7;
-const USER_CACHE_TTL = 300;
+export const PATIENT_TTL = 600; // 10 min — patient records change rarely
+export const PAYMENTS_TTL = 180; // 3 min — actively checked right after recording a payment
+export const APPOINTMENT_TTL = 180; // 3 min — changes constantly during business hours
+export const USER_PROFILE_TTL = 1800; // 30 min — roles/permissions rarely change; shorten if instant permission revocation matters more than reduced DB load
+export const SESSION_TTL = 86400; // 1 day — MUST match JWT expiry (see AuthService.login())
+export const OTP_TTL = 120; // 2 min — standard OTP window
+export const REFRESH_TOKEN_TTL = 60 * 60 * 24 * 7; // 7 days
+export const JWT_VALIDATE_CACHE_TTL = 300; // 5 min — cache for JwtStrategy.validate(), separate from USER_PROFILE_TTL above

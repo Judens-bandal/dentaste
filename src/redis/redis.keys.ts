@@ -22,6 +22,16 @@ export const patientsKey = () => `${env()}:dentaste:patients`;
 export const patientsByStatusKey = (status: string) =>
   `${env()}:dentaste:patients:status:${status}`;
 
+//---summary total
+export const paymentsKey = () => `${env()}:dentaste:payments`;
+
+export const totalReceivedKey = (
+  dateFrom: string,
+  dateTo: string,
+  branch?: string,
+) =>
+  `${env()}:dentaste:payments:total_received:${dateFrom}:${dateTo}:${branch ?? 'ALL'}`;
+
 // --- appointments ---
 
 export const appointmentsKey = () => `${env()}:dentaste:appointments`;
