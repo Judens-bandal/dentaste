@@ -4,17 +4,17 @@ import {
   ValidationArguments,
 } from 'class-validator';
 import { classToPlain, TransformFnParams } from 'class-transformer';
-import { ICustomRequest, IResponse } from './common.interface.js';
+import { ICustomRequest, IResponse } from './common.interface';
 import { Response } from 'express';
-import { ERole, ErrorCode } from './common.enum.js';
+import { ERole, ErrorCode } from './common.enum';
 import { BadRequestException } from '@nestjs/common';
-import { EBranch, EStatus } from '../src/appointment/enum/appointment.js';
+import { EBranch, EStatus } from '../src/appointment/enum/appointment';
 import { Repository } from 'typeorm';
-import { Appointment } from '../src/appointment/entity/appointment.js';
+import { Appointment } from '../src/appointment/entity/appointment';
 import {
   PATIENT_CONFLICT_BUFFER_MINUTES,
   SCHEDULE_CONFLICT_BUFFER_MINUTES,
-} from './common.constant.js';
+} from './common.constant';
 
 export function transformDateToISOString({
   value,

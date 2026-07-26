@@ -350,7 +350,7 @@ export class PaymentService {
           },
           mode: payment.mode,
           amo_paid: Number(payment.amountPaid),
-          dat_paid: payment.datePaid,
+          dat_paid: formatDateTime(payment.datePaid),
           cre_at: formatDateTime(payment.createdAt),
         });
       }

@@ -49,7 +49,7 @@ export class PaymentController {
     return await this.paymentService.getPayments(dto, req, res);
   }
 
-  @Cron('*/5 * * * * *')
+  // @Cron('*/5 * * * * *')
   async refreshPaymentsCacheJob() {
     // calls the DEDICATED cache-refresh method — NOT getPayments()
     await this.paymentService.refreshPaymentsCache();

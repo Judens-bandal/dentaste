@@ -5,9 +5,7 @@ import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 
 import { HealthModule } from './health/health.module';
 import { ScheduleModule } from '@nestjs/schedule';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
-import { Redis } from 'ioredis';
+import { ThrottlerModule } from '@nestjs/throttler';
 
 import { PatientModule } from './patient/patient.module';
 import { RolesGuard } from '../common/commons/guards/roles.guard';
