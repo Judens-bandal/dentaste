@@ -15,7 +15,7 @@ import { ApiBearerAuth } from '@nestjs/swagger';
 
 @ApiBearerAuth()
 @UseGuards(RolesGuard)
-@Controller('notification')
+@Controller('notifications')
 export class NotificationController {
   constructor(private readonly notificationsService: NotificationService) {}
 

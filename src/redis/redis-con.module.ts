@@ -125,13 +125,13 @@ const CHANNELS: string[] = [notificationBroadcast];
 function createRedisClient(config: ConfigService, name: string): Redis {
   const logger = new Logger(name);
 
-  logger.debug(`HOST: ${config.get('REDIS_HOST')}`);
-  logger.debug(`PORT: ${config.get('REDIS_PORT')}`);
-  logger.debug(`USERNAME: ${config.get('REDIS_USERNAME')}`);
-  logger.debug(
-    `PASSWORD length: ${config.get<string>('REDIS_PASSWORD')?.length}`,
-  );
-  logger.debug(`TLS: ${config.get('REDIS_TLS')}`);
+  // logger.debug(`HOST: ${config.get('REDIS_HOST')}`);
+  // logger.debug(`PORT: ${config.get('REDIS_PORT')}`);
+  // logger.debug(`USERNAME: ${config.get('REDIS_USERNAME')}`);
+  // logger.debug(
+  //   `PASSWORD length: ${config.get<string>('REDIS_PASSWORD')?.length}`,
+  // );
+  // logger.debug(`TLS: ${config.get('REDIS_TLS')}`);
   const redis = new Redis({
     host: config.get<string>('REDIS_HOST'),
     port: config.get<number>('REDIS_PORT'),
