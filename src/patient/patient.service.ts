@@ -34,7 +34,7 @@ export class PatientService {
     const response: IResponse = { code: HttpStatus.ACCEPTED, data: null };
 
     try {
-      const { id } = extractUser(req, dto);
+      const { id } = extractUser(req);
       if (!id) {
         response.data = { code: ErrorCode.MISSING_ID };
         response.code = HttpStatus.BAD_REQUEST;

@@ -31,9 +31,10 @@ export interface ICustomRequest extends Request {
 }
 
 export interface INotification {
-  notification_type: string;
+  stream_id?: string;
+  category: 'appointment' | 'other';
   message: string;
-  read: number;
+  read: number | boolean;
   created_at?: string;
   [key: string]: unknown;
 }

@@ -164,7 +164,7 @@ export class AppointmentService {
     // keys despite being a real conflict under the buffer rule.
     const lockResource = this.redisLock.generateLock(
       'appointment-slot',
-      dto.branch,
+      'global',
     );
     // const lock = await this.redisLock.singleLock(lockResource, 5000);
     const lock: ILock | undefined = await this.redisLock.singleLock(
@@ -411,7 +411,7 @@ export class AppointmentService {
       // requests 15 minutes apart both pass the conflict check in parallel.
       const lockResource = this.redisLock.generateLock(
         'appointment-slot',
-        newBranch,
+        'global',
       );
       const lock: ILock | undefined = await this.redisLock.singleLock(
         lockResource,

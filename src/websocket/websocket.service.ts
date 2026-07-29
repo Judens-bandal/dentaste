@@ -81,7 +81,7 @@ export class WebsocketService {
   // }
   async handleConnection(client: Socket): Promise<void> {
     try {
-      const bearer = client?.handshake?.auth?.accessToken as string;
+      const bearer = client?.handshake?.auth?.token as string;
       let decoded: IClaims | null = null;
 
       try {
@@ -392,12 +392,14 @@ export class WebsocketService {
         );
       }
 
-      await this.redis.xadd(noticeKey, '*', ...fields);
+      const streamId = await this.redis.xadd(noticeKey, '*', ...fields);
 
       if (this.server) {
-        this.server
-          .to(userRoom(userId))
-          .emit(ESocketEvent.NewNotification, notification);
+        this.server.to(userRoom(userId)).emit(ESocketEvent.NewNotification, {
+          ...notification,
+          stream_id: streamId,
+          read: false,
+        });
       }
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : String(error);
