@@ -20,6 +20,7 @@ import { LoggingInterceptor } from '../common/commons/interceptors/logging.inter
 import { WebsocketModule } from './websocket/websocket.module';
 import { ConfigModule } from '@nestjs/config';
 import { configValidationSchema } from '../common/database/config.schema';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -64,6 +65,8 @@ import { configValidationSchema } from '../common/database/config.schema';
         // ),
       }),
     }),
+
+    UsersModule,
   ],
 
   providers: [

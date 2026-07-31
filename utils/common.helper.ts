@@ -347,8 +347,12 @@ export async function assertNoScheduleConflict(
     .getMany();
 
   const conflict = sameDayAllBranches.find((existing) => {
-    if (excludeAppointmentId && existing.id === excludeAppointmentId) return false;
-    return Math.abs(new Date(existing.scheduledAt).getTime() - requestedTime) < bufferMs;
+    if (excludeAppointmentId && existing.id === excludeAppointmentId)
+      return false;
+    return (
+      Math.abs(new Date(existing.scheduledAt).getTime() - requestedTime) <
+      bufferMs
+    );
   });
 
   if (conflict) {

@@ -68,6 +68,9 @@ import {
   OnGatewayInit,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  SubscribeMessage,
+  MessageBody,
+  ConnectedSocket,
 } from '@nestjs/websockets';
 import { Inject, forwardRef, Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
@@ -92,15 +95,48 @@ export class WebsocketGateway
 
   afterInit(server: Server) {
     this.websocketService.setServer(server);
-    this.logger.log('WebSocket gateway initialized');
+    this.logger.log(
+      'WebSocket gateway initialized on namespace: /notifications',
+    );
   }
 
   handleConnection(client: Socket) {
+    this.logger.log(`Client connected: ${client.id}`);
     return this.websocketService.handleConnection(client);
   }
 
   handleDisconnect(client: Socket) {
+    this.logger.log(`Client disconnected: ${client.id}`);
     return this.websocketService.handleDisconnect(client);
+  }
+
+  @SubscribeMessage('join_room')
+  handleJoinRoom(
+    @MessageBody() room: string,
+    @ConnectedSocket() client: Socket,
+  ) {
+    void client.join(room);
+    this.logger.log(`Client ${client.id} joined room: ${room}`);
+  }
+
+  @SubscribeMessage('leave_room')
+  handleLeaveRoom(
+    @MessageBody() room: string,
+    @ConnectedSocket() client: Socket,
+  ) {
+    void client.leave(room);
+    this.logger.log(`Client ${client.id} left room: ${room}`);
+  }
+
+  sendPermissionsUpdate(
+    userId: string,
+    newPermissions: string[],
+    freshToken: string,
+  ) {
+    this.server.to(`user_${userId}`).emit('permissions_updated', {
+      permissions: newPermissions,
+      accessToken: freshToken,
+    });
   }
 
   broadcast(event: string, data: unknown) {

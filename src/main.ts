@@ -12,7 +12,10 @@ import {
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const cors = {
-    origin: ['https://dentaste-fe.vercel.app', 'http://localhost:3000'],
+    origin: [
+      'https://dentaste-iuvit26jy-zonics-projects-d3143b4b.vercel.app',
+      'http://localhost:3000',
+    ],
     // origin: 'http://localhost:3000',
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
