@@ -23,7 +23,7 @@ import { EPermissions, ERole } from '../../utils/common.enum';
 import { Roles } from '../../common/commons/decorator/roles.decorator';
 import { DeleteAppointmentDto } from '../appointment/dto/appointment';
 
-@Controller('patient')
+@Controller('patients')
 export class PatientController {
   constructor(private readonly patientService: PatientService) {}
 

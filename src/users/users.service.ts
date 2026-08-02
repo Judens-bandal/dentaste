@@ -26,6 +26,7 @@ import {
   UpdateUserPermissionsDto,
 } from './dto/user';
 import { DEFAULT_PASSWORD } from '../../utils/common.constant';
+import { AuthService } from '../auth/auth.service';
 
 const SALT_ROUNDS = 10;
 
@@ -37,6 +38,7 @@ export class UsersService {
     private readonly redis: RedisCacheService,
     private readonly websocketGateway: WebsocketGateway,
     private readonly notificationHelper: NotificationHelper,
+    private readonly authService: AuthService,
   ) {}
 
   async createUser(dto: CreateUserDto, req: ICustomRequest, res: Response) {
@@ -175,15 +177,16 @@ export class UsersService {
       await this.redis.del(userKey(dto.id));
       await this.redis.del(usersKey());
 
-      // 1. Live push — updates the target user's frontend Zustand store instantly
-      this.websocketGateway.server
-        .to(userRoom(dto.id))
-        .emit('permissions_updated', { permissions: dto.permissions });
+      // Generate a fresh token with updated permissions
+      const { accessToken } = await this.authService.refreshToken(dto.id);
 
-      // 2. Force token refresh — tells the client to immediately fetch a new token with updated permissions
+      // Emit permissions + new token in one event so frontend rehydrates instantly
       this.websocketGateway.server
         .to(userRoom(dto.id))
-        .emit('force_token_refresh', {});
+        .emit('permissions_updated', {
+          permissions: dto.permissions,
+          accessToken,
+        });
 
       void this.notificationHelper.notifyDoctors(
         EDoctorNotification.ASSISTANT_PERMISSIONS_CHANGED,
