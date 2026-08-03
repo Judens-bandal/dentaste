@@ -322,7 +322,7 @@ export function formatDateTime(
 // overlapping appointments regardless of which branch they are at.
 export async function assertNoScheduleConflict(
   appointmentRepository: Repository<Appointment>,
-  branch: string,
+  branch: EBranch,
   scheduledAt: string,
   excludeAppointmentId?: string,
 ): Promise<void> {
@@ -350,7 +350,7 @@ export async function assertNoScheduleConflict(
     if (excludeAppointmentId && existing.id === excludeAppointmentId)
       return false;
     return (
-      Math.abs(new Date(existing.scheduledAt).getTime() - requestedTime) <
+      Math.abs(new Date(existing.scheduled_at).getTime() - requestedTime) <
       bufferMs
     );
   });
@@ -402,7 +402,7 @@ export async function assertNoPatientScheduleConflict(
     if (excludeAppointmentId && existing.id === excludeAppointmentId) {
       return false; // skip the appointment being updated against itself
     }
-    const existingTime = new Date(existing.scheduledAt).getTime();
+    const existingTime = new Date(existing.scheduled_at).getTime();
     return Math.abs(existingTime - requestedTime) < bufferMs;
   });
 

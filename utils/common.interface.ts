@@ -68,18 +68,18 @@ export interface IAppointments {
   id: string;
   patient: {
     name: string;
-    cellphoneNumber: string;
+    cellphone_number: string;
     address: string;
     occupation: string;
     age: number;
   };
   branch: string;
-  treatmentDone: string;
-  scheduledAt: string;
-  debitAmount: number;
+  treatment_done: string;
+  scheduled_at: string;
+  debit_amount: number;
   balance: number;
-  appointmentStatus: EAppointmentStatus;
-  paymentStatus: EPaymentStatus;
+  appointment_status: EAppointmentStatus;
+  payment_status: EPaymentStatus;
 }
 export interface IPatient {
   id?: string;
@@ -88,7 +88,7 @@ export interface IPatient {
 
   address: string;
 
-  cellphoneNumber: string;
+  cellphone_number: string;
 
   age: number;
 
@@ -102,18 +102,18 @@ export interface IPatient {
 export interface IPayment {
   // id: string;
   appointment: {
-    treatmentDone: string;
+    treatment_done: string;
     branch: string;
     patient: {
       name: string;
-      cellphoneNumber: string;
+      cellphone_number: string;
       address: string;
     };
   };
   mode: string;
-  amo_paid: number;
-  dat_paid: string;
-  cre_at: string;
+  amount_paid: number;
+  date_paid: string;
+  created_at: string;
 }
 
 export interface ITotalReceivedPayments {

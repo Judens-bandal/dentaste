@@ -25,7 +25,7 @@ export class Patient {
   address: string;
 
   @Column({ name: 'cellphone_number', type: 'varchar', length: 20 })
-  cellphoneNumber: string;
+  cellphone_number: string;
 
   @Column({ type: 'int' })
   age: number;
@@ -38,11 +38,11 @@ export class Patient {
 
   @CreateDateColumn({ name: 'created_at' })
   @Transform(transformDateToISOString)
-  createdAt: Date;
+  created_at: Date;
 
   @UpdateDateColumn({ name: 'updated_at' })
   @Transform(transformDateToISOString)
-  updatedAt: Date;
+  updated_at: Date;
 
   @OneToMany(() => Appointment, (appointment) => appointment.patient)
   appointments: Appointment[];

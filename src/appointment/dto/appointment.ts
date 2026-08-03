@@ -19,7 +19,7 @@ export class CreateAppointmentDto {
   id: string;
 
   @IsUUID()
-  patientId: string;
+  patient_id: string;
 
   @IsEnum(EBranch)
   branch: EBranch;
@@ -27,15 +27,15 @@ export class CreateAppointmentDto {
   // Full ISO datetime now (not just a date) — e.g. '2026-07-20T14:30:00Z'
   @IsString()
   @IsFutureDate()
-  scheduledAt: string;
+  scheduled_at: string;
 
   @IsString()
   @IsNotEmpty()
-  treatmentDone: string;
+  treatment_done: string;
 
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
-  debitAmount: number;
+  debit_amount: number;
 
   // balance is NOT accepted from the client at all — it's always
   // trg_appointments_recalc_balance computing it from debitAmount on INSERT.
@@ -43,7 +43,7 @@ export class CreateAppointmentDto {
 
   @IsOptional()
   @IsEnum(EAppointmentStatus)
-  appointmentStatus!: EAppointmentStatus;
+  appointment_status!: EAppointmentStatus;
 }
 export class UpdateAppointmentDto {
   @IsUUID()
@@ -56,16 +56,16 @@ export class UpdateAppointmentDto {
   @IsOptional()
   @IsString()
   @IsFutureDate()
-  scheduledAt: string;
+  scheduled_at: string;
 
   @IsOptional()
   @IsString()
-  treatmentDone?: string;
+  treatment_done?: string;
 
   @IsOptional()
   @IsNumber()
   @Min(0)
-  debitAmount?: number;
+  debit_amount?: number;
 
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })
@@ -74,7 +74,7 @@ export class UpdateAppointmentDto {
 
   @IsOptional()
   @IsEnum(EAppointmentStatus)
-  appointmentStatus!: EAppointmentStatus;
+  appointment_status!: EAppointmentStatus;
 }
 
 export class GetAppointmentDto {
@@ -97,5 +97,5 @@ export class UpdateAppointmentStatusDto {
   id: string;
 
   @IsEnum(EAppointmentStatus)
-  appointmentStatus: EAppointmentStatus;
+  appointment_status: EAppointmentStatus;
 }

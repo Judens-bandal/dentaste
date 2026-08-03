@@ -200,7 +200,7 @@ export class PaymentService {
         // finishes, so it re-reads the balance AFTER the first payment
         // actually landed, instead of both racing off a stale read.
         const appointment = await queryRunner.manager.findOne(Appointment, {
-          where: { id: dto.appointmentId },
+          where: { id: dto.appointment_id },
           lock: { mode: 'pessimistic_write' },
         });
 
@@ -213,21 +213,21 @@ export class PaymentService {
 
         const currentBalance = Number(appointment.balance);
 
-        if (dto.amountPaid > currentBalance) {
+        if (dto.amount_paid > currentBalance) {
           await queryRunner.rollbackTransaction();
           response.data = {
             code: ErrorCode.PAYMENT_EXCEEDS_BALANCE,
-            message: `Payment of ${dto.amountPaid} exceeds the remaining balance of ${currentBalance}.`,
+            message: `Payment of ${dto.amount_paid} exceeds the remaining balance of ${currentBalance}.`,
           };
           response.code = HttpStatus.BAD_REQUEST;
           return;
         }
 
         const payment = queryRunner.manager.create(Payment, {
-          appointmentId: dto.appointmentId,
+          appointmentId: dto.appointment_id,
           mode: dto.mode,
-          amountPaid: dto.amountPaid,
-          datePaid: dto.datePaid,
+          amountPaid: dto.amount_paid,
+          datePaid: dto.date_paid,
         });
 
         const saved = await queryRunner.manager.save(payment);
@@ -242,21 +242,21 @@ export class PaymentService {
         // paymentsKey() was previously missing here — without it, getPayments()
         // would keep serving a stale list (missing this new payment) until
         // PAYMENTS_TTL expired naturally.
-        await this.redis.del(appointmentKey(dto.appointmentId));
+        await this.redis.del(appointmentKey(dto.appointment_id));
         await this.redis.del(appointmentsKey());
         await this.redis.del(paymentsKey());
 
         const patient = await this.patientRepository.findOne({
-          where: { id: appointment.patientId },
+          where: { id: appointment.patient_id },
           select: { name: true },
         });
 
         void this.notificationHelper.notifyDoctors(
           EDoctorNotification.PAYMENT_RECEIVED,
-          `Payment of ${dto.amountPaid} (${dto.mode}) received for ${patient?.name ?? 'a patient'}.`,
+          `Payment of ${dto.amount_paid} (${dto.mode}) received for ${patient?.name ?? 'a patient'}.`,
           {
-            appointmentId: dto.appointmentId,
-            amountPaid: dto.amountPaid,
+            appointmentId: dto.appointment_id,
+            amountPaid: dto.amount_paid,
             mode: dto.mode,
             patientName: patient?.name,
           },
@@ -317,20 +317,20 @@ export class PaymentService {
         },
         select: {
           mode: true,
-          amountPaid: true,
-          datePaid: true,
-          createdAt: true,
+          amount_paid: true,
+          date_paid: true,
+          created_at: true,
           appointment: {
-            treatmentDone: true,
+            treatment_done: true,
             branch: true,
             patient: {
               name: true,
-              cellphoneNumber: true,
+              cellphone_number: true,
               address: true,
             },
           },
         },
-        order: { createdAt: 'DESC' },
+        order: { created_at: 'DESC' },
       });
 
       const data: IPayment[] = [];
@@ -339,19 +339,19 @@ export class PaymentService {
         data.push({
           // id: payment.id ?? null,
           appointment: {
-            treatmentDone: payment.appointment?.treatmentDone ?? null,
+            treatment_done: payment.appointment?.treatment_done ?? null,
             branch: payment.appointment?.branch ?? null,
             patient: {
               name: payment.appointment?.patient?.name ?? null,
-              cellphoneNumber:
-                payment.appointment?.patient?.cellphoneNumber ?? null,
+              cellphone_number:
+                payment.appointment?.patient?.cellphone_number ?? null,
               address: payment.appointment?.patient?.address ?? null,
             },
           },
           mode: payment.mode,
-          amo_paid: Number(payment.amountPaid),
-          dat_paid: formatDateTime(payment.datePaid),
-          cre_at: formatDateTime(payment.createdAt),
+          amount_paid: Number(payment.amount_paid),
+          date_paid: formatDateTime(payment.date_paid),
+          created_at: formatDateTime(payment.created_at),
         });
       }
       await this.redis.set(cachekey, data, PAYMENTS_TTL);
@@ -364,85 +364,6 @@ export class PaymentService {
       expressResponse(res, response);
     }
   }
-  // ── Totals: single value, optionally filtered to one branch ────
-
-  // async getTotalReceivedPayments(
-  //   dto: GetTotalPaymentsDto,
-  //   req: ICustomRequest,
-  //   res: Response,
-  // ) {
-  //   const response: IResponse = { code: HttpStatus.ACCEPTED, data: null };
-
-  //   try {
-  //     const { id } = extractUser(req);
-  //     if (!id) {
-  //       response.data = { code: ErrorCode.MISSING_ID };
-  //       response.code = HttpStatus.BAD_REQUEST;
-  //       return;
-  //     }
-
-  //     if (!rangeValidator(dto.dateFrom, dto.dateTo)) {
-  //       response.data = {
-  //         code: ErrorCode.INVALID_DATE_RANGE,
-  //         message: '"dateFrom" must be on or before "dateTo".',
-  //       };
-  //       response.code = HttpStatus.BAD_REQUEST;
-  //       return;
-  //     }
-  //     // const cachekey = summarytotalKey();
-  //     // const cacheData = await this.redis.get<Payment[]>(cachekey);
-  //     // if (cacheData) {
-  //     //   response.data = { code: 0, data: cacheData };
-  //     //   response.code = HttpStatus.OK;
-  //     //   return;
-  //     // }
-
-  //     const qb = this.paymentRepository
-  //       .createQueryBuilder('payment')
-  //       .innerJoin('payment.appointment', 'appointment')
-  //       .where('payment.date_paid BETWEEN :dateFrom AND :dateTo', {
-  //         dateFrom: dto.dateFrom,
-  //         dateTo: dto.dateTo,
-  //       });
-
-  //     if (dto.branch) {
-  //       qb.andWhere('appointment.branch = :branch', { branch: dto.branch });
-  //     }
-
-  //     const result = await qb
-  //       .select('SUM(payment.amount_paid)', 'total')
-  //       .addSelect('COUNT(payment.id)', 'count')
-  //       .getRawOne();
-
-  //     const data: ITotalReceivedPayments = {
-  //       total_received: Number(result.total) || 0,
-  //       transaction_count: Number(result.count) || 0,
-  //       dateFrom: dto.dateFrom,
-  //       dateTo: dto.dateTo,
-  //       branch: dto.branch ?? 'ALL',
-  //     };
-
-  //     // await this.redis.set(cachekey, data, PATIENT_TTL);
-  //     response.data = { code: 0, data };
-  //     response.code = HttpStatus.OK;
-  //   } catch (error) {
-  //     console.error('Error calculating total received payments:', error);
-
-  //     if (error instanceof HttpException) {
-  //       const errorResponse = error.getResponse();
-  //       response.data =
-  //         typeof errorResponse === 'string'
-  //           ? { message: errorResponse }
-  //           : (errorResponse as Record<string, any>);
-  //       response.code = error.getStatus();
-  //     } else {
-  //       response.data = { code: ErrorCode.INTERNAL_SERVER_ERROR };
-  //       response.code = HttpStatus.INTERNAL_SERVER_ERROR;
-  //     }
-  //   } finally {
-  //     expressResponse(res, response);
-  //   }
-  // }
 
   //////
 

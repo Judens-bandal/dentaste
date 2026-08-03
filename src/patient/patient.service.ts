@@ -52,11 +52,11 @@ export class PatientService {
           id: true,
           name: true,
           address: true,
-          cellphoneNumber: true,
+          cellphone_number: true,
           age: true,
           occupation: true,
           status: true,
-          createdAt: true,
+          created_at: true,
           // updatedAt: true,
         },
       });
@@ -92,7 +92,7 @@ export class PatientService {
       const patient = this.patientRepository.create({
         name: dto.name,
         address: dto.address,
-        cellphoneNumber: dto.cellphoneNumber,
+        cellphone_number: dto.cellphoneNumber,
         age: dto.age,
         occupation: dto.occupation,
         status: dto.status,
@@ -146,7 +146,7 @@ export class PatientService {
       const patient: Partial<Patient> = {
         name: dto.name,
         address: dto.address,
-        cellphoneNumber: dto.cellphoneNumber,
+        cellphone_number: dto.cellphoneNumber,
         age: dto.age,
         occupation: dto.occupation,
         status: dto.status,

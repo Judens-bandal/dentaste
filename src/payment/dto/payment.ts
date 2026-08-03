@@ -19,17 +19,17 @@ export class CreatePaymentDto {
 
   @Optional()
   @IsUUID()
-  appointmentId: string;
+  appointment_id: string;
 
   @IsEnum(EPaymentMode)
   mode: EPaymentMode;
 
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01)
-  amountPaid: number;
+  amount_paid: number;
 
   @IsDateString()
-  datePaid: string;
+  date_paid: string;
 }
 
 export class GetPaymentDto {
@@ -48,11 +48,11 @@ export class UpdatePaymentDto {
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01)
-  amountPaid?: number;
+  amount_paid?: number;
 
   @IsOptional()
   @IsDateString()
-  datePaid?: string;
+  date_paid?: string;
 }
 
 // payments/dto/get-total-payments.dto.ts
