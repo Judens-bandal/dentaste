@@ -3,6 +3,7 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Repository } from 'typeorm';
@@ -14,13 +15,17 @@ import { CreateUserDto, LoginUserDto } from './common/dto/user';
 
 import * as bcrypt from 'bcrypt';
 
-import { ERole, ErrorCode } from '../../utils/common.enum';
+import { EPermissions, ERole, ErrorCode } from '../../utils/common.enum';
 import {
   EXP,
   LOCKOUT_SECONDS,
   MAX_FAILED_ATTEMPTS,
 } from '../../utils/common.constant';
 import { DEFAULT_ROLE_PERMISSIONS } from '../../utils/role.permission.constant';
+import {
+  EAdminNotification,
+  NotificationHelper,
+} from '../notification/common/notification.helper';
 
 @Injectable()
 export class AuthService {
@@ -29,7 +34,7 @@ export class AuthService {
     private userRepository: Repository<User>,
 
     private readonly jwtService: JwtService,
-    // private readonly notificationHelper: NotificationHelper, for redis
+    private readonly notificationHelper: NotificationHelper,
   ) {}
 
   verifyToken(token: string): JwtPayload {
@@ -75,11 +80,10 @@ export class AuthService {
     await this.userRepository.save(user);
 
     // for notification
-    // void this.notificationHelper.notifyAdmins(
-    //   EAdminNotification.USER_REGISTERED,
-    //   `New user "${name}" registered`,
-    //   { id: user.id },
-    // );
+    void this.notificationHelper.notifyAdmins(
+      EAdminNotification.USER_REGISTERED,
+      `New user "${name}" registered`,
+    );
   }
 
   //   async login(
@@ -239,11 +243,10 @@ export class AuthService {
       expiresIn: EXP, // 1 day, in seconds
     });
 
-    // void this.notificationHelper.notifyAdmins(
-    //   EAdminNotification.USER_LOGIN,
-    //   `${user.name} logged in`,
-    //   { id: user.id },
-    // );
+    void this.notificationHelper.notifyAdmins(
+      EAdminNotification.USER_LOGIN,
+      `${user.name} logged in`,
+    );
 
     return { accessToken };
   }
@@ -251,4 +254,67 @@ export class AuthService {
   // getAllUsers(): Promise<User[]> {
   //   return this.userRepository.find();
   // }
+
+  // Add this inside AuthService (auth.service.ts)
+  async refreshToken(userId: string): Promise<{ accessToken: string }> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException({
+        code: ErrorCode.USER_NOT_FOUND,
+      });
+    }
+
+    // Build the payload with the freshest database permissions
+    const payload: JwtPayload = {
+      name: user.name,
+      username: user.username,
+      role: user.role,
+      id: user.id,
+      permissions: user.permissions, // <--- Pulled live from DB
+    };
+
+    const accessToken = this.jwtService.sign(payload, {
+      expiresIn: EXP, // same expiration as login
+    });
+
+    return { accessToken };
+  }
+
+  async updatePermissions(
+    userId: string,
+    newPermissions: EPermissions[],
+  ): Promise<User> {
+    // 1. Find the user in the database
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // 2. Update and save the new permissions to DB
+    user.permissions = newPermissions;
+    const updatedUser = await this.userRepository.save(user);
+
+    // 3. Generate the fresh token
+    const freshToken = this.jwtService.sign(
+      {
+        id: updatedUser.id,
+        name: updatedUser.name,
+        username: updatedUser.username,
+        role: updatedUser.role,
+        permissions: updatedUser.permissions,
+      },
+      { expiresIn: EXP },
+    );
+
+    // 4. Emit via your NotificationHelper service instead of 'this.server'
+    this.notificationHelper.emitToUser(updatedUser.id, 'permissions_updated', {
+      permissions: updatedUser.permissions,
+      accessToken: freshToken,
+    });
+
+    return updatedUser;
+  }
 }

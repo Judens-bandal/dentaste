@@ -5,9 +5,7 @@ import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 
 import { HealthModule } from './health/health.module';
 import { ScheduleModule } from '@nestjs/schedule';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
-import { Redis } from 'ioredis';
+import { ThrottlerModule } from '@nestjs/throttler';
 
 import { PatientModule } from './patient/patient.module';
 import { RolesGuard } from '../common/commons/guards/roles.guard';
@@ -22,6 +20,7 @@ import { LoggingInterceptor } from '../common/commons/interceptors/logging.inter
 import { WebsocketModule } from './websocket/websocket.module';
 import { ConfigModule } from '@nestjs/config';
 import { configValidationSchema } from '../common/database/config.schema';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -66,6 +65,8 @@ import { configValidationSchema } from '../common/database/config.schema';
         // ),
       }),
     }),
+
+    UsersModule,
   ],
 
   providers: [

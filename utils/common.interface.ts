@@ -2,6 +2,10 @@ import { Request } from 'express';
 import { EPermissions, ERole } from './common.enum';
 import { JwtPayload } from '../src/auth/common/jwt-payload.interface';
 import { EPatientStatus } from '../src/patient/enum/enum';
+import {
+  EAppointmentStatus,
+  EPaymentStatus,
+} from '../src/appointment/enum/appointment';
 
 export interface IClaims {
   id: string;
@@ -27,9 +31,10 @@ export interface ICustomRequest extends Request {
 }
 
 export interface INotification {
-  notification_type: string;
+  stream_id?: string;
+  category: 'appointment' | 'other';
   message: string;
-  read: number;
+  read: number | boolean;
   created_at?: string;
   [key: string]: unknown;
 }
@@ -46,15 +51,36 @@ export interface IResponse {
 //   creator_role: EAppRole;
 // }
 
+// export interface IAppointments {
+//   id: string;
+//   patient: {
+//     name: string;
+//     cellphoneNumber: string;
+//     address: string;
+//   };
+//   branch: string;
+//   treatmentDone: string;
+//   noShow: number;
+//   scheduledAt: string;
+// }
+
 export interface IAppointments {
   id: string;
   patient: {
     name: string;
+    cellphone_number: string;
+    address: string;
+    occupation: string;
+    age: number;
   };
   branch: string;
-  scheduledAt: string;
+  treatment_done: string;
+  scheduled_at: string;
+  debit_amount: number;
+  balance: number;
+  appointment_status: EAppointmentStatus;
+  payment_status: EPaymentStatus;
 }
-
 export interface IPatient {
   id?: string;
 
@@ -62,7 +88,7 @@ export interface IPatient {
 
   address: string;
 
-  cellphoneNumber: string;
+  cellphone_number: string;
 
   age: number;
 
@@ -71,4 +97,58 @@ export interface IPatient {
   status: EPatientStatus;
 
   // appointments: Appointment[];
+}
+
+export interface IPayment {
+  // id: string;
+  appointment: {
+    treatment_done: string;
+    branch: string;
+    patient: {
+      name: string;
+      cellphone_number: string;
+      address: string;
+    };
+  };
+  mode: string;
+  amount_paid: number;
+  date_paid: string;
+  created_at: string;
+}
+
+export interface ITotalReceivedPayments {
+  total_received: number;
+  transaction_count: number;
+  dateFrom: string;
+  dateTo: string;
+  branch: string;
+}
+
+export interface IFullyPaidAppointmentsTotal {
+  fully_paid_total: number;
+  appointment_count: number;
+  date_from: string;
+  date_to: string;
+  branch: string;
+}
+
+export interface IBranchTotalReceived {
+  branch: string;
+  total_received: number;
+  transaction_count: number;
+}
+
+export interface ITotalReceivedByBranch {
+  date_from: string;
+  date_to: string;
+  branches: IBranchTotalReceived[];
+  grand_total: number;
+}
+
+export interface IAnnualTotalReceived {
+  year: string;
+  branch: string;
+  is_current_year?: number;
+  total_received: number;
+  transaction_count: number;
 }

@@ -5,10 +5,11 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Appointment } from './entity/appointment';
 import { AuthModule } from '../auth/auth.module';
 import { WebsocketModule } from '../websocket/websocket.module';
+import { Patient } from '../patient/entity/patient';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Appointment], 'main_repo'),
+    TypeOrmModule.forFeature([Appointment, Patient], 'main_repo'),
     AuthModule,
     WebsocketModule,
   ],

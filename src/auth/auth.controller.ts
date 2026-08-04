@@ -1,11 +1,28 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Post,
+  Req,
+  Res,
+  UnauthorizedException,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { CreateUserDto, LoginUserDto } from './common/dto/user';
 import { Public } from '../../common/commons/decorator/jwt.decorator';
+import { JwtAuthGuard } from '../../common/commons/guards/jwt-auth.guard';
+import { extractUser } from '../../utils/common.helper';
+import { ICustomRequest } from '../../utils/common.interface';
+import { ErrorCode } from '../../utils/common.enum';
 
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}
+
+  @Post('refresh-token')
+  async refreshToken(@Body('userId') userId: string) {
+    return this.authService.refreshToken(userId);
+  }
 
   @Post('/register')
   @Public()

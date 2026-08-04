@@ -7,12 +7,15 @@ import {
   Min,
   IsEnum,
   IsOptional,
+  IsUUID,
 } from 'class-validator';
 import { EPatientStatus } from '../enum/enum';
 import { Optional } from '@nestjs/common';
 
 export class CreatePatientDto {
   @IsOptional()
+  @IsString()
+  @IsUUID()
   id?: string;
 
   @IsString()

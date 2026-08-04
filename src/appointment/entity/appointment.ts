@@ -12,7 +12,7 @@ import {
 import { Patient } from '../../patient/entity/patient';
 
 import { Payment } from '../../payment/entity/payment';
-import { EBranch } from '../enum/appointment';
+import { EAppointmentStatus, EBranch } from '../enum/appointment';
 import { Transform } from 'class-transformer';
 import { transformDateToISOString } from '../../../utils/common.helper';
 
@@ -22,7 +22,7 @@ export class Appointment {
   id: string;
 
   @Column({ name: 'patient_id', type: 'uuid' })
-  patientId: string;
+  patient_id: string;
 
   @ManyToOne(() => Patient, (patient) => patient.appointments, {
     onDelete: 'CASCADE',
@@ -35,11 +35,11 @@ export class Appointment {
   branch: EBranch;
 
   // Renamed from date (DATE) — now stores exact date AND time.
-  @Column({ name: 'scheduled_at' })
-  scheduledAt: string;
+  @Column({ type: 'date', name: 'scheduled_at' })
+  scheduled_at: string;
 
   @Column({ name: 'treatment_done', type: 'text' })
-  treatmentDone: string;
+  treatment_done: string;
 
   @Column({
     name: 'debit_amount',
@@ -48,22 +48,28 @@ export class Appointment {
     scale: 2,
     default: 0,
   })
-  debitAmount: number;
+  debit_amount: number;
 
   // Read-only from the app side — maintained by DB triggers.
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   balance: number;
 
-  @Column({ name: 'no_show', type: 'smallint', default: 0 })
-  noShow: number;
+  // appointment.entity.ts — remove the noShow @Column entirely, add:
+  @Column({
+    name: 'appointment_status',
+    type: 'varchar',
+    length: 20,
+    default: EAppointmentStatus.SCHEDULED,
+  })
+  appointment_status!: EAppointmentStatus;
 
   @CreateDateColumn({ name: 'created_at' })
   @Transform(transformDateToISOString)
-  createdAt: Date;
+  created_at: Date;
 
   @UpdateDateColumn({ name: 'updated_at' })
   @Transform(transformDateToISOString)
-  updatedAt: Date;
+  updated_at: Date;
 
   @OneToMany(() => Payment, (payment) => payment.appointment)
   payments: Payment[];

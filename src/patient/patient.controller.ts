@@ -21,14 +21,15 @@ import { PatientService } from './patient.service';
 import { Permission } from '../../common/commons/decorator/permissions.decorator';
 import { EPermissions, ERole } from '../../utils/common.enum';
 import { Roles } from '../../common/commons/decorator/roles.decorator';
+import { DeleteAppointmentDto } from '../appointment/dto/appointment';
 
-@Controller('patient')
+@Controller('patients')
 export class PatientController {
   constructor(private readonly patientService: PatientService) {}
 
   @Get()
+  @Roles(ERole.DOCTOR, ERole.ASSISTANT)
   @Permission(EPermissions.VIEW_PATIENTS)
-  // @Roles(ERole.DOCTOR, ERole.ASSISTANT)
   async getAllPatients(
     @Query() dto: GetPatientDto,
     @Req() req: ICustomRequest,
@@ -38,6 +39,7 @@ export class PatientController {
   }
 
   @Post('/create')
+  @Roles(ERole.DOCTOR, ERole.ASSISTANT)
   @Permission(EPermissions.MANAGE_PATIENTS)
   async createPatient(
     @Body() dto: CreatePatientDto,
@@ -48,6 +50,7 @@ export class PatientController {
   }
 
   @Put('/update')
+  @Roles(ERole.DOCTOR, ERole.ASSISTANT)
   @Permission(EPermissions.MANAGE_PATIENTS)
   async updatePatient(
     @Body() dto: UpdatePatientDto,
@@ -58,6 +61,7 @@ export class PatientController {
   }
 
   @Delete('/delete')
+  @Roles(ERole.DOCTOR, ERole.ASSISTANT)
   @Permission(EPermissions.MANAGE_PATIENTS)
   async deletePatient(
     @Query() dto: GetPatientDto,

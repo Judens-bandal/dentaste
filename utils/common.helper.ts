@@ -4,11 +4,17 @@ import {
   ValidationArguments,
 } from 'class-validator';
 import { classToPlain, TransformFnParams } from 'class-transformer';
-import { ICustomRequest, IResponse } from './common.interface.js';
+import { ICustomRequest, IResponse } from './common.interface';
 import { Response } from 'express';
-import { ERole, ErrorCode } from './common.enum.js';
+import { ERole, ErrorCode } from './common.enum';
 import { BadRequestException } from '@nestjs/common';
-import { EBranch } from '../src/appointment/enum/appointment.js';
+import { EBranch, EStatus } from '../src/appointment/enum/appointment';
+import { Repository } from 'typeorm';
+import { Appointment } from '../src/appointment/entity/appointment';
+import {
+  PATIENT_CONFLICT_BUFFER_MINUTES,
+  SCHEDULE_CONFLICT_BUFFER_MINUTES,
+} from './common.constant';
 
 export function transformDateToISOString({
   value,
@@ -305,7 +311,167 @@ export function formatDateTime(
 
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
 
-  const period = get('dayPeriod').toLowerCase(); // "PM" -> "pm"
+  const period = get('dayPeriod').toLocaleUpperCase(); // "PM" -> "pm"
 
   return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')} ${period}`;
 }
+
+// Throws if ANY branch already has an appointment within
+// +/- SCHEDULE_CONFLICT_BUFFER_MINUTES of the requested time.
+// Since one doctor serves all branches, two branches cannot have
+// overlapping appointments regardless of which branch they are at.
+export async function assertNoScheduleConflict(
+  appointmentRepository: Repository<Appointment>,
+  branch: EBranch,
+  scheduledAt: string,
+  excludeAppointmentId?: string,
+): Promise<void> {
+  const requestedTime = new Date(scheduledAt).getTime();
+  const bufferMs = SCHEDULE_CONFLICT_BUFFER_MINUTES * 60 * 1000;
+
+  const dayStart = new Date(scheduledAt);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(scheduledAt);
+  dayEnd.setHours(23, 59, 59, 999);
+
+  // no branch filter — one doctor serves all branches so any branch
+  // having an appointment within the buffer window is a conflict
+  const sameDayAllBranches = await appointmentRepository
+    .createQueryBuilder('appointment')
+    .andWhere('appointment.scheduled_at >= :dayStart', {
+      dayStart: dayStart.toISOString(),
+    })
+    .andWhere('appointment.scheduled_at <= :dayEnd', {
+      dayEnd: dayEnd.toISOString(),
+    })
+    .getMany();
+
+  const conflict = sameDayAllBranches.find((existing) => {
+    if (excludeAppointmentId && existing.id === excludeAppointmentId)
+      return false;
+    return (
+      Math.abs(new Date(existing.scheduled_at).getTime() - requestedTime) <
+      bufferMs
+    );
+  });
+
+  if (conflict) {
+    const isSameBranch = conflict.branch === branch;
+    throw new BadRequestException({
+      code: ErrorCode.SCHEDULE_CONFLICT,
+      message: isSameBranch
+        ? `${branch} already has an appointment within ${SCHEDULE_CONFLICT_BUFFER_MINUTES} minutes of this time.`
+        : `${conflict.branch} already has an appointment within ${SCHEDULE_CONFLICT_BUFFER_MINUTES} minutes of this time — the doctor cannot be at two branches simultaneously.`,
+    });
+  }
+}
+
+// Throws if the SAME PATIENT already has an appointment within
+// +/- PATIENT_CONFLICT_BUFFER_MINUTES of the requested time, AT ANY BRANCH.
+// This is separate from assertNoScheduleConflict (which only checks
+// per-branch capacity) — a patient can't physically be at two branches
+// at once, regardless of whether each branch individually has room.
+export async function assertNoPatientScheduleConflict(
+  appointmentRepository: Repository<Appointment>,
+  patientId: string,
+  scheduledAt: string,
+  excludeAppointmentId?: string,
+): Promise<void> {
+  const requestedTime = new Date(scheduledAt).getTime();
+  const bufferMs = PATIENT_CONFLICT_BUFFER_MINUTES * 60 * 1000;
+
+  const dayStart = new Date(scheduledAt);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(scheduledAt);
+  dayEnd.setHours(23, 59, 59, 999);
+
+  // narrow to this patient's same-day appointments across ALL branches
+  // (no branch filter here — that's the whole point)
+  const sameDayForPatient = await appointmentRepository
+    .createQueryBuilder('appointment')
+    .where('appointment.patient_id = :patientId', { patientId })
+    .andWhere('appointment.scheduled_at >= :dayStart', {
+      dayStart: dayStart.toISOString(),
+    })
+    .andWhere('appointment.scheduled_at <= :dayEnd', {
+      dayEnd: dayEnd.toISOString(),
+    })
+    .getMany();
+
+  const hasConflict = sameDayForPatient.some((existing) => {
+    if (excludeAppointmentId && existing.id === excludeAppointmentId) {
+      return false; // skip the appointment being updated against itself
+    }
+    const existingTime = new Date(existing.scheduled_at).getTime();
+    return Math.abs(existingTime - requestedTime) < bufferMs;
+  });
+
+  if (hasConflict) {
+    throw new BadRequestException({
+      code: ErrorCode.PATIENT_SCHEDULE_CONFLICT,
+      message: `This patient already has an appointment within ${PATIENT_CONFLICT_BUFFER_MINUTES} minutes of this time at another branch.`,
+    });
+  }
+}
+
+export function rangeValidator(
+  from: Date | string | null,
+  to: Date | string | null,
+): boolean {
+  if (!from || !to) return true; // nothing to validate if either side is missing
+
+  const fromDate = new Date(from);
+  const toDate = new Date(to);
+
+  // explicitly reject invalid dates instead of relying on NaN comparisons
+  // silently evaluating to false — this makes the failure reason clear
+  // if you ever add validation error messages downstream
+  if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {
+    return false;
+  }
+
+  return fromDate <= toDate;
+}
+
+// add to common.helper.ts, near parseToDatabaseDate
+
+export interface IYearDateRange {
+  year: string;
+  is_current_year: EStatus;
+  start_date: string;
+  end_date: string;
+}
+
+/**
+ * Resolves a target year (defaulting to the current year if omitted) into
+ * a start/end date range, capping endDate at TODAY instead of Dec 31 when
+ * the target year is the current one.
+ */
+export function getYearDateRange(year?: string): IYearDateRange {
+  const now = new Date();
+
+  // Always ensure the resolved year is a string
+  const currentYear = String(extractYear(now));
+  const resolvedYear = year ?? currentYear;
+
+  const isCurrentYear = resolvedYear === currentYear;
+
+  const start_date = parseToDatabaseDate(`${resolvedYear}-01-01`) as string;
+  const end_date = isCurrentYear
+    ? (parseToDatabaseDate(now.toISOString()) as string)
+    : (parseToDatabaseDate(`${resolvedYear}-12-31`) as string);
+
+  return {
+    year: resolvedYear,
+    is_current_year: isCurrentYear ? EStatus.ACTIVE : EStatus.INACTIVE,
+    start_date,
+    end_date,
+  };
+}
+
+export const extractYear = (input: string | Date): number => {
+  if (typeof input === 'string') {
+    return Number(input.slice(0, 4));
+  }
+  return input.getUTCFullYear();
+};

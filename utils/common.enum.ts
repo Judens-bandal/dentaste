@@ -36,6 +36,7 @@ export enum EPermissions {
   MANAGE_APPOINTMENTS = 'MA',
   VIEW_PAYMENTS = 'VPY',
   MANAGE_PAYMENTS = 'MPY',
+  VIEW_PAYMENTS_TOTAL = 'VPTS',
   VIEW_REPORTS = 'VR',
   VIEW_NOTIFICATIONS = 'VN',
   MANAGE_NOTIFICATIONS = 'MN',
@@ -52,6 +53,7 @@ export enum ErrorCode {
   // ==============================
   INTERNAL_SERVER_ERROR = 500001,
   TOO_MANY_LOGIN_ATTEMPTS = 50002,
+  INVALID_DATE_RANGE = 50003,
 
   // ==============================
   // AUTHENTICATION (401000)
@@ -99,12 +101,14 @@ export enum ErrorCode {
   BRANCH_ALREADY_EXIST = 400102,
   BRANCH_HAS_ASSIGNED_APPOINTMENTS = 400103,
   BRANCH_NOT_ALLOWED_ON_DATE = 4000104,
+  SCHEDULE_CONFLICT = 4000105,
 
   // ==============================
   // PATIENT (400150)
   // ==============================
   PATIENT_NOT_FOUND = 400151,
   PATIENT_ALREADY_EXIST = 400152,
+  PATIENT_SCHEDULE_CONFLICT = 400153,
 
   // ==============================
   // APPOINTMENT (400200)
@@ -114,13 +118,15 @@ export enum ErrorCode {
   APPOINTMENT_BRANCH_MISMATCH = 400203,
   APPOINTMENT_DATE_INVALID = 400204,
   APPOINTMENT_ALREADY_MARKED_NO_SHOW = 400205,
-
+  LOCK_BUSY = 40000,
+  STATUS_NOT_MANUALLY_SETTABLE = 4000206,
   // ==============================
   // PAYMENT (400250)
   // ==============================
   PAYMENT_NOT_FOUND = 400251,
   PAYMENT_APPOINTMENT_NOT_FOUND = 400252,
   PAYMENT_EXCEEDS_DEBIT_AMOUNT = 400253,
+  PAYMENT_EXCEEDS_BALANCE = 400254,
 
   // ==============================
   // AI SETTINGS (400300)
