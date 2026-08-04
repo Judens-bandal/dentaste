@@ -224,10 +224,10 @@ export class PaymentService {
         }
 
         const payment = queryRunner.manager.create(Payment, {
-          appointmentId: dto.appointment_id,
+          appointment_id: dto.appointment_id,
           mode: dto.mode,
-          amountPaid: dto.amount_paid,
-          datePaid: dto.date_paid,
+          amount_paid: dto.amount_paid,
+          date_paid: dto.date_paid,
         });
 
         const saved = await queryRunner.manager.save(payment);

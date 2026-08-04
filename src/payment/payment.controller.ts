@@ -12,7 +12,7 @@ import { EPermissions, ERole } from '../../utils/common.enum';
 import { Cron } from '@nestjs/schedule';
 import { Roles } from '../../common/commons/decorator/roles.decorator';
 
-@Controller('payment')
+@Controller('payments')
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
 
