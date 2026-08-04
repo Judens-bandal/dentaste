@@ -248,17 +248,22 @@ export class PaymentService {
 
         const patient = await this.patientRepository.findOne({
           where: { id: appointment.patient_id },
-          select: { name: true },
+          select: { last_name: true, first_name: true, middle_name: true },
         });
 
         void this.notificationHelper.notifyDoctors(
           EDoctorNotification.PAYMENT_RECEIVED,
-          `Payment of ${dto.amount_paid} (${dto.mode}) received for ${patient?.name ?? 'a patient'}.`,
+          `Payment of ${dto.amount_paid} (${dto.mode}) received for ${patient?.last_name ?? 'a patient'}.`,
           {
             appointmentId: dto.appointment_id,
             amountPaid: dto.amount_paid,
             mode: dto.mode,
-            patientName: patient?.name,
+            patientName:
+              patient?.last_name +
+              ' ' +
+              patient?.first_name +
+              ' ' +
+              (patient?.middle_name || ''),
           },
         );
 
@@ -324,7 +329,9 @@ export class PaymentService {
             treatment_done: true,
             branch: true,
             patient: {
-              name: true,
+              last_name: true,
+              first_name: true,
+              middle_name: true,
               cellphone_number: true,
               address: true,
             },
@@ -342,7 +349,12 @@ export class PaymentService {
             treatment_done: payment.appointment?.treatment_done ?? null,
             branch: payment.appointment?.branch ?? null,
             patient: {
-              name: payment.appointment?.patient?.name ?? null,
+              name:
+                payment.appointment?.patient?.last_name +
+                ' ' +
+                payment.appointment?.patient?.first_name +
+                ' ' +
+                (payment.appointment?.patient?.middle_name || ''),
               cellphone_number:
                 payment.appointment?.patient?.cellphone_number ?? null,
               address: payment.appointment?.patient?.address ?? null,

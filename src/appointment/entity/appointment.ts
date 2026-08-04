@@ -15,6 +15,7 @@ import { Payment } from '../../payment/entity/payment';
 import { EAppointmentStatus, EBranch } from '../enum/appointment';
 import { Transform } from 'class-transformer';
 import { transformDateToISOString } from '../../../utils/common.helper';
+import { EDentalService } from '../enum/appointment';
 
 @Entity('appointments')
 export class Appointment {
@@ -38,6 +39,14 @@ export class Appointment {
   @Column({ type: 'date', name: 'scheduled_at' })
   scheduled_at: string;
 
+  @Column({ type: 'varchar', length: 30, nullable: true })
+  service: EDentalService;
+
+  // holds the mini-enum value (EBraceType | EDentureType | EOdontectomyType |
+  // EToothExtractionType | EVeneerType) for services that have sub-choices
+  @Column({ name: 'service_type', type: 'varchar', length: 30, nullable: true })
+  service_type: string | null;
+
   @Column({ name: 'treatment_done', type: 'text' })
   treatment_done: string;
 
@@ -48,7 +57,7 @@ export class Appointment {
     scale: 2,
     default: 0,
   })
-  debit_amount: number;
+  amount_charge: number;
 
   // Read-only from the app side — maintained by DB triggers.
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })

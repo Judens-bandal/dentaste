@@ -1,5 +1,5 @@
 export enum EPatientStatus {
-  NEW = 'NEW',
-  ACTIVE = 'ACTIVE',
-  INACTIVE = 'INACTIVE',
+  SINGLE = 'single',
+  MARRIED = 'married',
+  WIDOWED = 'widowed',
 }

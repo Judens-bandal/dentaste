@@ -21,8 +21,8 @@ export class HealthController {
     private health: HealthCheckService,
     private db: TypeOrmHealthIndicator,
     private configService: ConfigService,
-    @InjectDataSource('main_repo') // ← add
-    private dataSource: DataSource, // ← add
+    @InjectDataSource('main_repo')
+    private dataSource: DataSource,
   ) {}
 
   @Get()

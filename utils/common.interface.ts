@@ -4,6 +4,7 @@ import { JwtPayload } from '../src/auth/common/jwt-payload.interface';
 import { EPatientStatus } from '../src/patient/enum/enum';
 import {
   EAppointmentStatus,
+  EDentalService,
   EPaymentStatus,
 } from '../src/appointment/enum/appointment';
 
@@ -64,16 +65,44 @@ export interface IResponse {
 //   scheduledAt: string;
 // }
 
+// export interface IAppointments {
+//   id: string;
+//   patient: {
+//     last_name: string;
+//     first_name: string;
+//     middle_name: string;
+//     cellphone_number: string;
+//     address: string;
+//     occupation: string;
+//     age: number;
+//     complain: string;
+//     status: EPatientStatus;
+//   };
+//   branch: string;
+//   treatment_done: string;
+//   scheduled_at: string;
+//   debit_amount: number;
+//   balance: number;
+//   appointment_status: EAppointmentStatus;
+//   payment_status: EPaymentStatus;
+// }
+
 export interface IAppointments {
   id: string;
   patient: {
-    name: string;
+    last_name: string;
+    first_name: string;
+    middle_name: string;
     cellphone_number: string;
     address: string;
     occupation: string;
     age: number;
+    complain: string;
+    status: EPatientStatus;
   };
   branch: string;
+  service: EDentalService;
+  service_type: string | null;
   treatment_done: string;
   scheduled_at: string;
   debit_amount: number;
@@ -81,6 +110,7 @@ export interface IAppointments {
   appointment_status: EAppointmentStatus;
   payment_status: EPaymentStatus;
 }
+
 export interface IPatient {
   id?: string;
 
