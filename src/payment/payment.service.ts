@@ -245,8 +245,8 @@ export class PaymentService {
             newBalance <= 0
               ? EAppointmentStatus.COMPLETED
               : appointment.appointment_status === EAppointmentStatus.COMPLETED
-              ? EAppointmentStatus.SCHEDULED
-              : appointment.appointment_status;
+                ? EAppointmentStatus.SCHEDULED
+                : appointment.appointment_status;
         }
 
         await queryRunner.manager.update(
