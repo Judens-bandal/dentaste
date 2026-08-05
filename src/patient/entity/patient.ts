@@ -24,8 +24,8 @@ export class Patient {
   @Column({ type: 'varchar', length: 150 })
   first_name: string;
 
-  @Column({ type: 'varchar', length: 150 })
-  middle_name: string;
+  @Column({ type: 'varchar', length: 150, nullable: true })
+  middle_name: string | null;
 
   @Column({ type: 'varchar', length: 255 })
   address: string;
@@ -40,7 +40,7 @@ export class Patient {
   occupation: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
-  complain: string;
+  complain: string | null;
 
   @Column({ type: 'varchar', length: 20, default: EPatientStatus.SINGLE })
   status: EPatientStatus;

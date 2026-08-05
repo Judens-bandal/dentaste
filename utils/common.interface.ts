@@ -92,12 +92,12 @@ export interface IAppointments {
   patient: {
     last_name: string;
     first_name: string;
-    middle_name: string;
+    middle_name: string | null;
     cellphone_number: string;
     address: string;
     occupation: string;
     age: number;
-    complain: string;
+    complain: string | null;
     status: EPatientStatus;
   };
   branch: string;
@@ -105,7 +105,7 @@ export interface IAppointments {
   service_type: string | null;
   treatment_done: string;
   scheduled_at: string;
-  debit_amount: number;
+  amount_charge: number;
   balance: number;
   appointment_status: EAppointmentStatus;
   payment_status: EPaymentStatus;

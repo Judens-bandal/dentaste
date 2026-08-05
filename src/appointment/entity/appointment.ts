@@ -35,11 +35,11 @@ export class Appointment {
   @Column({ type: 'varchar', length: 20 })
   branch: EBranch;
 
-  // Renamed from date (DATE) — now stores exact date AND time.
-  @Column({ type: 'date', name: 'scheduled_at' })
+  // Renamed from date — now stores exact date AND time.
+  @Column({ type: 'timestamptz', name: 'scheduled_at' })
   scheduled_at: string;
 
-  @Column({ type: 'varchar', length: 30, nullable: true })
+  @Column({ type: 'varchar', length: 30 })
   service: EDentalService;
 
   // holds the mini-enum value (EBraceType | EDentureType | EOdontectomyType |
@@ -51,7 +51,7 @@ export class Appointment {
   treatment_done: string;
 
   @Column({
-    name: 'debit_amount',
+    name: 'amount_charge',
     type: 'decimal',
     precision: 10,
     scale: 2,

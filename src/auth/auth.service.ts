@@ -236,7 +236,7 @@ export class AuthService {
       username: user.username,
       role: user.role,
       id: user.id,
-      permissions: user.permissions,
+      permissions: user.permissions ?? [],
     };
 
     const accessToken = this.jwtService.sign(payload, {
@@ -273,7 +273,7 @@ export class AuthService {
       username: user.username,
       role: user.role,
       id: user.id,
-      permissions: user.permissions, // <--- Pulled live from DB
+      permissions: user.permissions ?? [], // <--- Pulled live from DB
     };
 
     const accessToken = this.jwtService.sign(payload, {

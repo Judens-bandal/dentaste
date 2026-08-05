@@ -680,7 +680,7 @@ export class AppointmentService {
           service_type: appointment.service_type ?? null,
           treatment_done: appointment.treatment_done ?? null,
           scheduled_at: formatDateTime(appointment.scheduled_at),
-          debit_amount,
+          amount_charge: debit_amount,
           balance,
           appointment_status: appointment.appointment_status,
           payment_status: getPaymentStatus(debit_amount, balance), // ← fixed: use the Number()-converted locals
@@ -785,8 +785,8 @@ export class AppointmentService {
           dto.treatment_done ??
           getTreatmentLabel(dto.service, dto.service_type),
         amount_charge: dto.amount_charge,
+        balance: dto.amount_charge,
         appointment_status: dto.appointment_status,
-        // balance omitted — trg_appointments_recalc_balance computes it on INSERT
       });
 
       const saved = await this.appointmentRepository.save(appointment);
@@ -922,6 +922,19 @@ export class AppointmentService {
           dto.id,
         );
 
+        const newAmountCharge = dto.amount_charge ?? existing.amount_charge;
+        const newBalance =
+          dto.amount_charge !== undefined
+            ? Number(existing.balance) +
+              (dto.amount_charge - Number(existing.amount_charge))
+            : existing.balance;
+        const newAppointmentStatus =
+          dto.appointment_status ??
+          (existing.appointment_status === EAppointmentStatus.COMPLETED &&
+          newBalance > 0
+            ? EAppointmentStatus.SCHEDULED
+            : existing.appointment_status);
+
         const appointment: Partial<Appointment> = {
           branch: newBranch,
           scheduled_at: newScheduledAt, // raw value — not formatted
@@ -932,9 +945,9 @@ export class AppointmentService {
             (dto.service || dto.service_type
               ? getTreatmentLabel(newService, newServiceType ?? undefined)
               : existing.treatment_done),
-          amount_charge: dto.amount_charge ?? existing.amount_charge,
-          appointment_status:
-            dto.appointment_status ?? existing.appointment_status,
+          amount_charge: newAmountCharge,
+          balance: newBalance,
+          appointment_status: newAppointmentStatus,
         };
 
         await this.appointmentRepository.update({ id: dto.id }, appointment);

@@ -451,7 +451,7 @@
 
 //       await this.dataSource.query(`
 //         UPDATE appointments a
-//         SET balance = a.debit_amount - COALESCE(
+//         SET balance = a.amount_charge - COALESCE(
 //           (SELECT SUM(p.amount_paid) FROM payments p WHERE p.appointment_id = a.id), 0
 //         );
 //       `);
@@ -470,7 +470,7 @@
 //           END IF;
 
 //           SELECT
-//             debit_amount - COALESCE((SELECT SUM(amount_paid) FROM payments WHERE appointment_id = target_id), 0),
+//             amount_charge - COALESCE((SELECT SUM(amount_paid) FROM payments WHERE appointment_id = target_id), 0),
 //             appointment_status
 //           INTO new_balance, current_status
 //           FROM appointments WHERE id = target_id;
@@ -488,7 +488,7 @@
 
 //           IF TG_OP = 'UPDATE' AND OLD.appointment_id IS DISTINCT FROM NEW.appointment_id THEN
 //             UPDATE appointments
-//             SET balance = debit_amount - COALESCE(
+//             SET balance = amount_charge - COALESCE(
 //               (SELECT SUM(amount_paid) FROM payments WHERE appointment_id = OLD.appointment_id), 0
 //             )
 //             WHERE id = OLD.appointment_id;
@@ -511,9 +511,9 @@
 //       // --- appointments: keep balance in sync when debit_amount changes ---
 
 //       await this.dataSource.query(`
-//         CREATE OR REPLACE FUNCTION recalc_appointment_balance_on_debit_change() RETURNS TRIGGER AS $$
+//         CREATE OR REPLACE FUNCTION recalc_appointment_balance_on_amount_charge_change() RETURNS TRIGGER AS $$
 //         BEGIN
-//           NEW.balance := NEW.debit_amount - COALESCE(
+//           NEW.balance := NEW.amount_charge - COALESCE(
 //             (SELECT SUM(amount_paid) FROM payments WHERE appointment_id = NEW.id), 0
 //           );
 //           RETURN NEW;
@@ -526,8 +526,8 @@
 //       );
 //       await this.dataSource.query(`
 //         CREATE TRIGGER trg_appointments_recalc_balance
-//         BEFORE INSERT OR UPDATE OF debit_amount ON appointments
-//         FOR EACH ROW EXECUTE FUNCTION recalc_appointment_balance_on_debit_change();
+//         BEFORE INSERT OR UPDATE OF amount_charge ON appointments
+//         FOR EACH ROW EXECUTE FUNCTION recalc_appointment_balance_on_amount_charge_change();
 //       `);
 
 //       this.logger.log(
@@ -641,11 +641,12 @@ export class DatabaseService implements OnApplicationBootstrap {
   ) {}
 
   async onApplicationBootstrap() {
-    // await this.patientsTable();
-    // await this.appointmentsTable();
-    // await this.appointmentServiceColumnsMigration();
-    // await this.patientsMigration();
-    // await this.appointmentScheduledAtTypeMigration();
+    await this.patientsTable();
+    await this.appointmentsTable();
+    await this.appointmentServiceColumnsMigration();
+    // // await this.patientsMigration();
+    // // await this.appointmentScheduledAtTypeMigration();
+    await this.paymentsTable();
   }
 
   // gen_random_uuid() lives in pgcrypto on Postgres < 14 — it's built into
@@ -664,7 +665,7 @@ export class DatabaseService implements OnApplicationBootstrap {
     try {
       const query = `
         CREATE TABLE IF NOT EXISTS users (
-          id          CHAR(36)     NOT NULL DEFAULT gen_random_uuid(),
+          id          UUID         NOT NULL DEFAULT gen_random_uuid(),
           name        VARCHAR(150) NOT NULL,
           username    VARCHAR(150) NOT NULL UNIQUE,
           password    VARCHAR(255) NOT NULL,
@@ -686,7 +687,7 @@ export class DatabaseService implements OnApplicationBootstrap {
     try {
       const query = `
         CREATE TABLE IF NOT EXISTS patients (
-          id                CHAR(36)     NOT NULL DEFAULT gen_random_uuid(),
+          id                UUID         NOT NULL DEFAULT gen_random_uuid(),
           last_name         VARCHAR(150) NOT NULL,
           first_name        VARCHAR(150) NOT NULL,
           middle_name       VARCHAR(150) NULL,
@@ -713,23 +714,22 @@ export class DatabaseService implements OnApplicationBootstrap {
       // branch stores one of EBranches ('UEP_MAIN' | 'CATUBIG' | 'CALBAYOG')
       // directly — no branches table/FK, since the set of branches is fixed.
       //
-      // scheduled_at is TEXT (not TIMESTAMPTZ) and no_show is SMALLINT (0/1,
-      // not BOOLEAN) — matches the entity's current field types. See
-      // appointmentColumnTypeMigration() for how existing rows get converted.
+      // scheduled_at is stored as TIMESTAMPTZ. No old no_show column exists in
+      // the current entity schema.
       const query = `
         CREATE TABLE IF NOT EXISTS appointments (
-          id              CHAR(36)      NOT NULL DEFAULT gen_random_uuid(),
-          patient_id      CHAR(36)      NOT NULL,
+          id              UUID          NOT NULL DEFAULT gen_random_uuid(),
+          patient_id      UUID          NOT NULL,
           branch          VARCHAR(20)   NOT NULL,
-          scheduled_at       DATE          NOT NULL,
-          treatment_done     TEXT          NOT NULL,
-          service            VARCHAR(30)   NOT NULL,
-          service_type       VARCHAR(30)   NULL,
-          amount_charge      NUMERIC(10,2) NOT NULL DEFAULT 0,
-          balance            NUMERIC(10,2) NOT NULL DEFAULT 0,
-          appointment_status VARCHAR(20)   NOT NULL DEFAULT 'SCHEDULED',
-          created_at         TIMESTAMP     NOT NULL DEFAULT NOW(),
-          updated_at         TIMESTAMP     NOT NULL DEFAULT NOW(),
+          scheduled_at    TIMESTAMPTZ   NOT NULL,
+          treatment_done  TEXT          NOT NULL,
+          service         VARCHAR(30)   NOT NULL,
+          service_type    VARCHAR(30)   NULL,
+          amount_charge   NUMERIC(10,2) NOT NULL DEFAULT 0,
+          balance         NUMERIC(10,2) NOT NULL DEFAULT 0,
+          appointment_status VARCHAR(20) NOT NULL DEFAULT 'SCHEDULED',
+          created_at      TIMESTAMP     NOT NULL DEFAULT NOW(),
+          updated_at      TIMESTAMP     NOT NULL DEFAULT NOW(),
           PRIMARY KEY (id),
           CONSTRAINT fk_appointment_patient FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
         );
@@ -794,8 +794,8 @@ export class DatabaseService implements OnApplicationBootstrap {
     try {
       const query = `
         CREATE TABLE IF NOT EXISTS payments (
-          id              CHAR(36)      NOT NULL DEFAULT gen_random_uuid(),
-          appointment_id  CHAR(36)      NOT NULL,
+          id              UUID          NOT NULL DEFAULT gen_random_uuid(),
+          appointment_id  UUID          NOT NULL,
           mode            VARCHAR(20)   NOT NULL,
           amount_paid     NUMERIC(10,2) NOT NULL,
           date_paid       DATE          NOT NULL,
@@ -972,37 +972,13 @@ export class DatabaseService implements OnApplicationBootstrap {
 
       if (
         scheduledAtType.length > 0 &&
-        scheduledAtType[0].data_type !== 'text'
+        scheduledAtType[0].data_type !== 'timestamp with time zone'
       ) {
         await this.dataSource.query(`
           ALTER TABLE appointments
-          ALTER COLUMN scheduled_at TYPE TEXT USING scheduled_at::TEXT;
+          ALTER COLUMN scheduled_at TYPE timestamptz USING scheduled_at::timestamptz;
         `);
-        this.logger.log('appointments.scheduled_at converted to TEXT');
-      }
-
-      const noShowType = await this.dataSource.query(`
-        SELECT data_type
-        FROM information_schema.columns
-        WHERE table_schema = current_schema()
-        AND table_name = 'appointments'
-        AND column_name = 'appointment_status'
-      `);
-
-      if (noShowType.length > 0 && noShowType[0].data_type !== 'smallint') {
-        // must drop the boolean default before the type change,
-        // then set the new integer default afterward
-        await this.dataSource.query(`
-          ALTER TABLE appointments ALTER COLUMN no_show DROP DEFAULT;
-        `);
-        await this.dataSource.query(`
-          ALTER TABLE appointments
-          ALTER COLUMN no_show TYPE SMALLINT USING (no_show::INT);
-        `);
-        await this.dataSource.query(`
-          ALTER TABLE appointments ALTER COLUMN no_show SET DEFAULT 0;
-        `);
-        this.logger.log('appointments.no_show converted to SMALLINT');
+        this.logger.log('appointments.scheduled_at converted to TIMESTAMPTZ');
       }
 
       this.logger.log(
@@ -1068,7 +1044,7 @@ export class DatabaseService implements OnApplicationBootstrap {
 
       await this.dataSource.query(`
         UPDATE appointments a
-        SET balance = a.debit_amount - COALESCE(
+        SET balance = a.amount_charge - COALESCE(
           (SELECT SUM(p.amount_paid) FROM payments p WHERE p.appointment_id = a.id), 0
         );
       `);
@@ -1128,9 +1104,9 @@ export class DatabaseService implements OnApplicationBootstrap {
       // --- appointments: keep balance in sync when debit_amount changes ---
 
       await this.dataSource.query(`
-        CREATE OR REPLACE FUNCTION recalc_appointment_balance_on_debit_change() RETURNS TRIGGER AS $$
+        CREATE OR REPLACE FUNCTION recalc_appointment_balance_on_amount_charge_change() RETURNS TRIGGER AS $$
         BEGIN
-          NEW.balance := NEW.debit_amount - COALESCE(
+          NEW.balance := NEW.amount_charge - COALESCE(
             (SELECT SUM(amount_paid) FROM payments WHERE appointment_id = NEW.id), 0
           );
           RETURN NEW;
@@ -1143,8 +1119,8 @@ export class DatabaseService implements OnApplicationBootstrap {
       );
       await this.dataSource.query(`
         CREATE TRIGGER trg_appointments_recalc_balance
-        BEFORE INSERT OR UPDATE OF debit_amount ON appointments
-        FOR EACH ROW EXECUTE FUNCTION recalc_appointment_balance_on_debit_change();
+        BEFORE INSERT OR UPDATE OF amount_charge ON appointments
+        FOR EACH ROW EXECUTE FUNCTION recalc_appointment_balance_on_amount_charge_change();
       `);
 
       this.logger.log(
