@@ -347,6 +347,8 @@ export class PaymentService {
           date_paid: true,
           created_at: true,
           appointment: {
+            service: true,
+            service_type: true,
             treatment_done: true,
             branch: true,
             patient: {
@@ -367,6 +369,8 @@ export class PaymentService {
         data.push({
           // id: payment.id ?? null,
           appointment: {
+            service: payment.appointment?.service ?? null,
+            service_type: payment.appointment?.service_type ?? null,
             treatment_done: payment.appointment?.treatment_done ?? null,
             branch: payment.appointment?.branch ?? null,
             patient: {

@@ -659,31 +659,31 @@ export class AppointmentService {
       const data: IAppointments[] = [];
 
       for (const appointment of appointments) {
-        const debit_amount = Number(appointment.amount_charge);
+        const amount_charge = Number(appointment.amount_charge);
         const balance = Number(appointment.balance);
 
         data.push({
           id: appointment.id ?? null,
           patient: {
-            last_name: appointment.patient?.last_name ?? null,
-            first_name: appointment.patient?.first_name ?? null,
+            last_name: appointment.patient?.last_name,
+            first_name: appointment.patient?.first_name,
             middle_name: appointment.patient?.middle_name ?? null,
             cellphone_number: appointment.patient?.cellphone_number ?? null,
             address: appointment.patient?.address ?? null,
             occupation: appointment.patient?.occupation ?? null,
             age: appointment.patient?.age ?? null,
-            complain: appointment.patient?.complain ?? null,
             status: appointment.patient?.status ?? null,
+            complain: appointment.patient?.complain ?? null,
           },
           branch: appointment.branch,
           service: appointment.service,
           service_type: appointment.service_type ?? null,
           treatment_done: appointment.treatment_done ?? null,
           scheduled_at: formatDateTime(appointment.scheduled_at),
-          amount_charge: debit_amount,
+          amount_charger: amount_charge,
           balance,
           appointment_status: appointment.appointment_status,
-          payment_status: getPaymentStatus(debit_amount, balance), // ← fixed: use the Number()-converted locals
+          payment_status: getPaymentStatus(amount_charge, balance), // ← fixed: use the Number()-converted locals
         });
       }
 
