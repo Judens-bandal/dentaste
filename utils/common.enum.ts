@@ -30,6 +30,7 @@ export enum ERole {
 
 // src/common/enums/permissions.enum.ts
 export enum EPermissions {
+  MAINTENANCE_SETTINGS = 'SM',
   VIEW_PATIENTS = 'VPT',
   MANAGE_PATIENTS = 'MPT',
   VIEW_APPOINTMENTS = 'VAP',

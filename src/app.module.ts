@@ -21,6 +21,8 @@ import { WebsocketModule } from './websocket/websocket.module';
 import { ConfigModule } from '@nestjs/config';
 import { configValidationSchema } from '../common/database/config.schema';
 import { UsersModule } from './users/users.module';
+import { SystemmaintenanceModule } from './systemmaintenance/systemmaintenance.module';
+import { MaintenanceGuard } from './systemmaintenance/common/guards/maintenance.guard';
 
 @Module({
   imports: [
@@ -67,9 +69,15 @@ import { UsersModule } from './users/users.module';
     }),
 
     UsersModule,
+
+    SystemmaintenanceModule,
   ],
 
   providers: [
+    {
+      provide: APP_GUARD,
+      useClass: MaintenanceGuard,
+    },
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,

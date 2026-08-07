@@ -43,7 +43,7 @@ import {
   GetPaymentDto,
   GetTotalPaymentsDto,
 } from './dto/payment';
-import { EBranch } from '../appointment/enum/appointment';
+import { EAppointmentStatus, EBranch } from '../appointment/enum/appointment';
 import { PATIENT_TTL, PAYMENTS_TTL } from '../redis/redis.ttl';
 
 @Injectable()
