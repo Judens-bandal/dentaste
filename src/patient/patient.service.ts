@@ -50,11 +50,14 @@ export class PatientService {
       const patient = await this.patientRepository.find({
         select: {
           id: true,
-          name: true,
+          last_name: true,
+          first_name: true,
+          middle_name: true,
           address: true,
           cellphone_number: true,
           age: true,
           occupation: true,
+          complain: true,
           status: true,
           created_at: true,
           // updatedAt: true,
@@ -90,12 +93,15 @@ export class PatientService {
         return;
       }
       const patient = this.patientRepository.create({
-        name: dto.name,
+        last_name: dto.last_name,
+        first_name: dto.first_name,
+        middle_name: dto.middle_name,
         address: dto.address,
-        cellphone_number: dto.cellphoneNumber,
+        cellphone_number: dto.cellphone_number,
         age: dto.age,
         occupation: dto.occupation,
         status: dto.status,
+        complain: dto.complain,
       });
 
       await this.patientRepository.save(patient);
@@ -104,7 +110,14 @@ export class PatientService {
         id,
         EDoctorNotification.PATIENT_CREATED,
         'A new patient has been added.',
-        { name: patient.name },
+        {
+          name:
+            patient.last_name +
+            ' ' +
+            patient.first_name +
+            ' ' +
+            (patient.middle_name || ''),
+        },
       );
       response.data = { code: 0, data: patient };
       response.code = HttpStatus.CREATED;
@@ -144,12 +157,15 @@ export class PatientService {
       }
 
       const patient: Partial<Patient> = {
-        name: dto.name,
+        last_name: dto.last_name,
+        first_name: dto.first_name,
+        middle_name: dto.middle_name,
         address: dto.address,
-        cellphone_number: dto.cellphoneNumber,
+        cellphone_number: dto.cellphone_number,
         age: dto.age,
         occupation: dto.occupation,
         status: dto.status,
+        complain: dto.complain,
       };
 
       await this.patientRepository.update({ id: dto.id }, patient);
@@ -159,7 +175,14 @@ export class PatientService {
         id,
         EDoctorNotification.PATIENT_UPDATED,
         'New patient has been updated.',
-        { name: patient.name },
+        {
+          name:
+            patient.last_name +
+            ' ' +
+            patient.first_name +
+            ' ' +
+            (patient.middle_name || ''),
+        },
       );
       response.data = { code: 0, data: patient };
       response.code = HttpStatus.OK;
@@ -202,7 +225,7 @@ export class PatientService {
       void this.notificationHelper.notifyDoctor(
         id,
         EDoctorNotification.PATIENT_DELETED,
-        `A new patient, ${patient.name}, has been deleted.`,
+        `A new patient, ${patient.last_name} ${patient.first_name} ${patient.middle_name || ''}, has been deleted.`,
       );
 
       response.data = { code: 0 };

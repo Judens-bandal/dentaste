@@ -4,6 +4,8 @@ import { JwtPayload } from '../src/auth/common/jwt-payload.interface';
 import { EPatientStatus } from '../src/patient/enum/enum';
 import {
   EAppointmentStatus,
+  EBranch,
+  EDentalService,
   EPaymentStatus,
 } from '../src/appointment/enum/appointment';
 
@@ -64,50 +66,55 @@ export interface IResponse {
 //   scheduledAt: string;
 // }
 
-export interface IAppointments {
+export interface IAppointment {
   id: string;
   patient: {
-    name: string;
+    last_name: string;
+    first_name: string;
+    middle_name?: string | null;
     cellphone_number: string;
     address: string;
     occupation: string;
     age: number;
+    status: EPatientStatus;
+    complain?: string | null;
   };
-  branch: string;
-  treatment_done: string;
+  branch: EBranch;
+  service: EDentalService | null;
+  service_type: string | null;
+  treatment_done: string | null;
   scheduled_at: string;
-  debit_amount: number;
+  amount_charger: number;
   balance: number;
   appointment_status: EAppointmentStatus;
   payment_status: EPaymentStatus;
 }
+
+export type IAppointments = IAppointment;
+
 export interface IPatient {
   id?: string;
-
-  name: string;
-
+  last_name?: string;
+  first_name?: string;
+  middle_name?: string | null;
   address: string;
-
   cellphone_number: string;
-
   age: number;
-
   occupation: string;
-
   status: EPatientStatus;
-
-  // appointments: Appointment[];
+  complain?: string | null;
 }
 
 export interface IPayment {
-  // id: string;
   appointment: {
-    treatment_done: string;
-    branch: string;
+    service: EDentalService | null;
+    service_type: string | null;
+    treatment_done: string | null;
+    branch: string | null;
     patient: {
       name: string;
-      cellphone_number: string;
-      address: string;
+      cellphone_number: string | null;
+      address: string | null;
     };
   };
   mode: string;

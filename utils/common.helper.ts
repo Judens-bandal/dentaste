@@ -184,7 +184,7 @@ export function IsFutureDate(options?: ValidationOptions) {
             return valueUtc >= todayUtc;
           }
 
-          return date.getTime() >= Date.now();
+          return date.getTime() >= Date.now() - 8 * 60 * 60 * 1000;
         },
         defaultMessage(args: ValidationArguments) {
           return `${args.property} must be a future or present date-time`;
@@ -293,6 +293,20 @@ export function assertBranchAllowedForDate(date: Date, branch: EBranch): void {
   }
 }
 
+export function toManilaUTC(input: string): string {
+  // already has timezone info — trust it
+  if (/[Zz]$|[+-]\d{2}:?\d{2}$/.test(input)) {
+    return new Date(input).toISOString();
+  }
+  // naive string — treat as Asia/Manila (UTC+8), subtract 8 hours
+  const [datePart, timePart = '00:00:00'] = input.replace('T', ' ').split(' ');
+  const [year, month, day] = datePart.split('-').map(Number);
+  const [hour, minute, second = 0] = timePart.split(':').map(Number);
+  return new Date(
+    Date.UTC(year, month - 1, day, hour - 8, minute, second),
+  ).toISOString();
+}
+
 export function formatDateTime(
   date: Date | string,
   timeZone = 'Asia/Manila',
@@ -311,9 +325,11 @@ export function formatDateTime(
 
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
 
-  const period = get('dayPeriod').toLocaleUpperCase(); // "PM" -> "pm"
+  const period = get('dayPeriod').toUpperCase();
+  const hour = get('hour').padStart(2, '0');
+  const minute = get('minute').padStart(2, '0');
 
-  return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')} ${period}`;
+  return `${get('year')}-${get('month')}-${get('day')} ${hour}:${minute} ${period}`;
 }
 
 // Throws if ANY branch already has an appointment within

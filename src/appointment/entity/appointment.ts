@@ -15,6 +15,7 @@ import { Payment } from '../../payment/entity/payment';
 import { EAppointmentStatus, EBranch } from '../enum/appointment';
 import { Transform } from 'class-transformer';
 import { transformDateToISOString } from '../../../utils/common.helper';
+import { EDentalService } from '../enum/appointment';
 
 @Entity('appointments')
 export class Appointment {
@@ -34,21 +35,29 @@ export class Appointment {
   @Column({ type: 'varchar', length: 20 })
   branch: EBranch;
 
-  // Renamed from date (DATE) — now stores exact date AND time.
-  @Column({ type: 'date', name: 'scheduled_at' })
+  // Renamed from date — now stores exact date AND time.
+  @Column({ type: 'timestamptz', name: 'scheduled_at' })
   scheduled_at: string;
+
+  @Column({ type: 'varchar', length: 30 })
+  service: EDentalService;
+
+  // holds the mini-enum value (EBraceType | EDentureType | EOdontectomyType |
+  // EToothExtractionType | EVeneerType) for services that have sub-choices
+  @Column({ name: 'service_type', type: 'varchar', length: 30, nullable: true })
+  service_type: string | null;
 
   @Column({ name: 'treatment_done', type: 'text' })
   treatment_done: string;
 
   @Column({
-    name: 'debit_amount',
+    name: 'amount_charge',
     type: 'decimal',
     precision: 10,
     scale: 2,
     default: 0,
   })
-  debit_amount: number;
+  amount_charge: number;
 
   // Read-only from the app side — maintained by DB triggers.
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })

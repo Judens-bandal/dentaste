@@ -18,21 +18,21 @@ export class User {
   id: string;
 
   @IsEmail()
-  @Column('varchar', { length: 20 })
+  @Column('varchar', { length: 150 })
   username: string;
 
-  @Column('varchar', { length: 100 })
+  @Column('varchar', { length: 255 })
   @Exclude({ toPlainOnly: true })
   password: string;
 
-  @Column('varchar', { length: 20 })
+  @Column('varchar', { length: 150 })
   name: string;
 
   @Column('enum', { enum: ERole, default: ERole.ASSISTANT })
   role: ERole;
 
-  @Column({ type: 'json' })
-  permissions: EPermissions[];
+  @Column({ type: 'json', nullable: true })
+  permissions: EPermissions[] | null;
 
   @CreateDateColumn()
   @Transform(transformDateToISOString)

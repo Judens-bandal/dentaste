@@ -44,7 +44,7 @@ import {
   GetTotalPaymentsDto,
 } from './dto/payment';
 import { EBranch } from '../appointment/enum/appointment';
-import { PAYMENTS_TTL } from '../redis/redis.ttl';
+import { PATIENT_TTL, PAYMENTS_TTL } from '../redis/redis.ttl';
 
 @Injectable()
 export class PaymentService {
@@ -231,8 +231,29 @@ export class PaymentService {
         });
 
         const saved = await queryRunner.manager.save(payment);
-        // trg_payments_recalc_balance fires here, inside this same
-        // transaction, recalculating appointments.balance before commit
+
+        const newBalance = Number(appointment.balance) - dto.amount_paid;
+        const appointmentUpdate: Partial<Appointment> = {
+          balance: newBalance,
+        };
+
+        if (
+          appointment.appointment_status !== EAppointmentStatus.NO_SHOW &&
+          appointment.appointment_status !== EAppointmentStatus.CANCELLED
+        ) {
+          appointmentUpdate.appointment_status =
+            newBalance <= 0
+              ? EAppointmentStatus.COMPLETED
+              : appointment.appointment_status === EAppointmentStatus.COMPLETED
+                ? EAppointmentStatus.SCHEDULED
+                : appointment.appointment_status;
+        }
+
+        await queryRunner.manager.update(
+          Appointment,
+          { id: dto.appointment_id },
+          appointmentUpdate,
+        );
 
         await queryRunner.commitTransaction();
 
@@ -248,17 +269,22 @@ export class PaymentService {
 
         const patient = await this.patientRepository.findOne({
           where: { id: appointment.patient_id },
-          select: { name: true },
+          select: { last_name: true, first_name: true, middle_name: true },
         });
 
         void this.notificationHelper.notifyDoctors(
           EDoctorNotification.PAYMENT_RECEIVED,
-          `Payment of ${dto.amount_paid} (${dto.mode}) received for ${patient?.name ?? 'a patient'}.`,
+          `Payment of ${dto.amount_paid} (${dto.mode}) received for ${patient?.last_name ?? 'a patient'}.`,
           {
             appointmentId: dto.appointment_id,
             amountPaid: dto.amount_paid,
             mode: dto.mode,
-            patientName: patient?.name,
+            patientName:
+              patient?.last_name +
+              ' ' +
+              patient?.first_name +
+              ' ' +
+              (patient?.middle_name || ''),
           },
         );
 
@@ -321,10 +347,14 @@ export class PaymentService {
           date_paid: true,
           created_at: true,
           appointment: {
+            service: true,
+            service_type: true,
             treatment_done: true,
             branch: true,
             patient: {
-              name: true,
+              last_name: true,
+              first_name: true,
+              middle_name: true,
               cellphone_number: true,
               address: true,
             },
@@ -339,10 +369,17 @@ export class PaymentService {
         data.push({
           // id: payment.id ?? null,
           appointment: {
+            service: payment.appointment?.service ?? null,
+            service_type: payment.appointment?.service_type ?? null,
             treatment_done: payment.appointment?.treatment_done ?? null,
             branch: payment.appointment?.branch ?? null,
             patient: {
-              name: payment.appointment?.patient?.name ?? null,
+              name:
+                payment.appointment?.patient?.last_name +
+                ' ' +
+                payment.appointment?.patient?.first_name +
+                ' ' +
+                (payment.appointment?.patient?.middle_name || ''),
               cellphone_number:
                 payment.appointment?.patient?.cellphone_number ?? null,
               address: payment.appointment?.patient?.address ?? null,

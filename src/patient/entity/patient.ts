@@ -19,7 +19,13 @@ export class Patient {
   id: string;
 
   @Column({ type: 'varchar', length: 150 })
-  name: string;
+  last_name: string;
+
+  @Column({ type: 'varchar', length: 150 })
+  first_name: string;
+
+  @Column({ type: 'varchar', length: 150, nullable: true })
+  middle_name: string | null;
 
   @Column({ type: 'varchar', length: 255 })
   address: string;
@@ -33,7 +39,10 @@ export class Patient {
   @Column({ type: 'varchar', length: 100 })
   occupation: string;
 
-  @Column({ type: 'varchar', length: 20, default: EPatientStatus.NEW })
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  complain: string | null;
+
+  @Column({ type: 'varchar', length: 20, default: EPatientStatus.SINGLE })
   status: EPatientStatus;
 
   @CreateDateColumn({ name: 'created_at' })

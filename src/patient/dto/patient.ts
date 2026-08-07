@@ -21,7 +21,16 @@ export class CreatePatientDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(150)
-  name: string;
+  last_name: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(150)
+  first_name: string;
+
+  @IsString()
+  @Optional()
+  middle_name: string;
 
   @IsString()
   @IsNotEmpty()
@@ -31,7 +40,7 @@ export class CreatePatientDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(20)
-  cellphoneNumber: string;
+  cellphone_number: string;
 
   @IsInt()
   @Min(0)
@@ -41,6 +50,9 @@ export class CreatePatientDto {
   @IsNotEmpty()
   @MaxLength(100)
   occupation: string;
+
+  @Optional()
+  complain?: string;
 
   @IsOptional()
   @IsEnum(EPatientStatus)
@@ -54,7 +66,16 @@ export class UpdatePatientDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(150)
-  name: string;
+  last_name: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(150)
+  first_name: string;
+
+  @IsString()
+  @Optional()
+  middle_name: string;
 
   @IsString()
   @IsNotEmpty()
@@ -64,7 +85,7 @@ export class UpdatePatientDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(20)
-  cellphoneNumber: string;
+  cellphone_number: string;
 
   @IsInt()
   @Min(0)
@@ -74,6 +95,10 @@ export class UpdatePatientDto {
   @IsNotEmpty()
   @MaxLength(100)
   occupation: string;
+
+  @IsString()
+  @Optional()
+  complain?: string;
 
   @Optional()
   @IsEnum(EPatientStatus)
