@@ -71,14 +71,15 @@ import { Payment } from '../../src/payment/entity/payment';
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_DATABASE'),
         // url: configService.get<string>('DATABASE_URL'),
+        timeZone: 'Z',
 
         ssl: {
-          rejectUnauthorized: false, // Important for Supabase
+          rejectUnauthorized: false,
         },
 
-        // Extra options for better Supabase compatibility
         extra: {
           max: 20,
+          connectionTimeoutMillis: 10000,
         },
 
         entities: [User, Patient, Appointment, Payment], // Add all your entities here

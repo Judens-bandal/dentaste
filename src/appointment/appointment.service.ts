@@ -556,6 +556,7 @@ import {
   expressResponse,
   extractUser,
   formatDateTime,
+  toManilaUTC,
 } from '../../utils/common.helper';
 import {
   CreateAppointmentDto,
@@ -778,7 +779,7 @@ export class AppointmentService {
       const appointment = this.appointmentRepository.create({
         patient_id: dto.patient_id,
         branch: dto.branch,
-        scheduled_at: dto.scheduled_at, // raw ISO value — DO NOT format before persisting
+        scheduled_at: toManilaUTC(dto.scheduled_at),
         service: dto.service,
         service_type: dto.service_type ?? null,
         treatment_done:
