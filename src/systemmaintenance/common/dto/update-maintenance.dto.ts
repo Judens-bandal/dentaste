@@ -16,11 +16,11 @@ export class UpdateMaintenanceDto {
   @IsString()
   message?: string;
 
-  @ValidateIf((o) => o.enabled)
+  @ValidateIf((o) => o.enabled === 0)
   @IsDateString()
   date_from?: string;
 
-  @ValidateIf((o) => o.enabled)
+  @ValidateIf((o) => o.enabled === 0)
   @IsDateString()
   date_to?: string;
 }

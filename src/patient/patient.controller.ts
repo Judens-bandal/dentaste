@@ -29,8 +29,8 @@ export class PatientController {
   constructor(private readonly patientService: PatientService) {}
 
   @Get()
-  @Roles(ERole.DOCTOR, ERole.ADMIN)
-  // @Permission(EPermissions.VIEW_PATIENTS)
+  @Roles(ERole.DOCTOR, ERole.ASSISTANT)
+  @Permission(EPermissions.VIEW_PATIENTS)
   async getAllPatients(
     @Query() dto: GetPatientDto,
     @Req() req: ICustomRequest,

@@ -56,6 +56,7 @@ export enum ErrorCode {
   TOO_MANY_LOGIN_ATTEMPTS = 50002,
   INVALID_DATE_RANGE = 50003,
   INVALID_SERVICE_TYPE = 50004,
+  SYSTEM_MAINTENANCE = 50005,
   // ==============================
   // AUTHENTICATION (401000)
   // ==============================
