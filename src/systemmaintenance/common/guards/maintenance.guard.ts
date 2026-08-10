@@ -10,6 +10,7 @@ import { Reflector } from '@nestjs/core';
 import { SKIP_MAINTENANCE_KEY } from '../decorators/skip-maintenance.decorator';
 import { MAINTENANCE_WHITELIST } from '../maintenance.constants';
 import { SystemmaintenanceService } from '../../systemmaintenance.service';
+import { ErrorCode } from 'utils/common.enum';
 
 @Injectable()
 export class MaintenanceGuard implements CanActivate {
@@ -78,7 +79,7 @@ export class MaintenanceGuard implements CanActivate {
 
       throw new ServiceUnavailableException({
         success: false,
-        statusCode: 503,
+        statusCode: ErrorCode.SYSTEM_MAINTENANCE,
         message: status.message ?? 'System is under maintenance.',
       });
     }
@@ -103,7 +104,7 @@ export class MaintenanceGuard implements CanActivate {
      */
     throw new ServiceUnavailableException({
       success: false,
-      statusCode: 503,
+      statusCode: ErrorCode.SYSTEM_MAINTENANCE,
       message: status.message ?? 'System is currently under maintenance.',
       date_from: status.date_from,
       date_to: status.date_to,

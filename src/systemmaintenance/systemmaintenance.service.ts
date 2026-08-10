@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { RedisCacheService } from '../redis/redis-cach.service';
 import { MAINTENANCE_KEY } from './common/maintenance.constants';
-import { json } from 'express';
+import { WebsocketGateway } from '../websocket/websocket.gateway';
 
 export interface MaintenanceStatus {
   enabled: 0 | 1;
@@ -12,7 +12,10 @@ export interface MaintenanceStatus {
 
 @Injectable()
 export class SystemmaintenanceService {
-  constructor(private readonly redis: RedisCacheService) {}
+  constructor(
+    private readonly redis: RedisCacheService,
+    private readonly websocketGateway: WebsocketGateway,
+  ) {}
 
   async enable(dto: MaintenanceStatus) {
     if (!dto.date_from || !dto.date_to) {
@@ -35,6 +38,8 @@ export class SystemmaintenanceService {
 
     await this.redis.set(MAINTENANCE_KEY, JSON.stringify(payload));
 
+    this.websocketGateway.broadcast('maintenance_updated', payload);
+
     return payload;
   }
 
@@ -44,6 +49,8 @@ export class SystemmaintenanceService {
     };
 
     await this.redis.set(MAINTENANCE_KEY, JSON.stringify(payload));
+
+    this.websocketGateway.broadcast('maintenance_updated', payload);
 
     return payload;
   }
