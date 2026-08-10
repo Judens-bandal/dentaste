@@ -64,11 +64,11 @@ export class AppointmentController {
     return await this.appointmentService.updateAppointment(dto, req, res);
   }
 
-  @Delete('/delete')
   @Roles(ERole.DOCTOR, ERole.ASSISTANT)
   @Permission(EPermissions.MANAGE_APPOINTMENTS)
+  @Delete('/delete')
   async deleteAppointment(
-    @Query() dto: DeleteAppointmentDto,
+    @Body() dto: DeleteAppointmentDto,
     @Req() req: ICustomRequest,
     @Res() res: Response,
   ) {

@@ -209,7 +209,7 @@ export class GetAppointmentDto {
 }
 
 export class DeleteAppointmentDto {
-  @IsString()
+  @IsUUID()
   id: string;
 }
 
