@@ -641,7 +641,8 @@ export class DatabaseService implements OnApplicationBootstrap {
   ) {}
 
   async onApplicationBootstrap() {
-    // await this.patientsTable();
+    await this.patientsTable();
+    await this.patientHealthQuestionsMigration();
     // await this.appointmentsTable();
     // await this.appointmentServiceColumnsMigration();
     // // await this.patientsMigration();
@@ -683,30 +684,262 @@ export class DatabaseService implements OnApplicationBootstrap {
     }
   }
 
+  // async patientsTable() {
+  //   try {
+  //     const query = `
+  //       CREATE TABLE IF NOT EXISTS patients (
+  //         id                UUID         NOT NULL DEFAULT gen_random_uuid(),
+  //         last_name         VARCHAR(150) NOT NULL,
+  //         first_name        VARCHAR(150) NOT NULL,
+  //         middle_name       VARCHAR(150) NULL,
+  //         address           VARCHAR(255) NOT NULL,
+  //         cellphone_number  VARCHAR(20)  NOT NULL,
+  //         age               INT          NOT NULL,
+  //         occupation        VARCHAR(100) NOT NULL,
+  //         complain          VARCHAR(255) NULL,
+  //         status            VARCHAR(20)  NOT NULL DEFAULT 'SINGLE',
+  //         created_at        TIMESTAMP    NOT NULL DEFAULT NOW(),
+  //         updated_at        TIMESTAMP    NOT NULL DEFAULT NOW(),
+  //         PRIMARY KEY (id)
+  //       );
+  //     `;
+  //     await this.dataSource.query(query);
+  //     this.logger.log('patients table created successfully');
+  //   } catch (error) {
+  //     this.logger.error('Error creating patients table', error);
+  //   }
+  // }
+
   async patientsTable() {
     try {
       const query = `
-        CREATE TABLE IF NOT EXISTS patients (
-          id                UUID         NOT NULL DEFAULT gen_random_uuid(),
-          last_name         VARCHAR(150) NOT NULL,
-          first_name        VARCHAR(150) NOT NULL,
-          middle_name       VARCHAR(150) NULL,
-          address           VARCHAR(255) NOT NULL,
-          cellphone_number  VARCHAR(20)  NOT NULL,
-          age               INT          NOT NULL,
-          occupation        VARCHAR(100) NOT NULL,
-          complain          VARCHAR(255) NULL,
-          status            VARCHAR(20)  NOT NULL DEFAULT 'SINGLE',
-          created_at        TIMESTAMP    NOT NULL DEFAULT NOW(),
-          updated_at        TIMESTAMP    NOT NULL DEFAULT NOW(),
-          PRIMARY KEY (id)
-        );
-      `;
+      CREATE TABLE IF NOT EXISTS patients (
+        id                        CHAR(36)      NOT NULL DEFAULT gen_random_uuid(),
+        last_name                 VARCHAR(150)  NOT NULL,
+        first_name                VARCHAR(150)  NOT NULL,
+        middle_name               VARCHAR(150)  NULL,
+        birthdate                 DATE          NULL,
+        age                       INT           NULL,
+        sex                       VARCHAR(1)    NULL,                 
+        nickname                  VARCHAR(100)  NULL,
+        religion                  VARCHAR(100)  NULL,
+        nationality               VARCHAR(100)  NULL,
+        address              VARCHAR(255)  NULL,
+        home_no                   VARCHAR(30)   NULL,
+        office_no                 VARCHAR(30)   NULL,
+        fax_no                    VARCHAR(30)   NULL,
+        cellphone_number          VARCHAR(20)   NULL,
+        email                     VARCHAR(150)  NULL,
+        occupation                VARCHAR(100)  NULL,
+        dental_insurance          VARCHAR(150)  NULL,
+        effective_date            DATE          NULL,
+
+        parent_guardian_name      VARCHAR(150)  NULL,
+        parent_occupation         VARCHAR(100)  NULL,
+        referred_by               VARCHAR(255)  NULL,
+        reason_for_consultation   VARCHAR(255)  NULL,
+
+        prev_dentist              VARCHAR(150)  NULL,
+        last_dental_visit         VARCHAR(100)  NULL,
+
+        -- Medical History – Physician
+        physician_name            VARCHAR(150)  NULL,
+        physician_specialty       VARCHAR(100)  NULL,
+        physician_office_address  VARCHAR(255)  NULL,
+        physician_office_no       VARCHAR(30)   NULL,
+
+        ar_gh                     SMALLINT      NOT NULL DEFAULT 1,   
+        ar_umt                    SMALLINT      NOT NULL DEFAULT 1,   
+        umt_cond                  VARCHAR(255)  NULL,                 
+        ar_sio                    SMALLINT      NOT NULL DEFAULT 1,   
+        sio_detail                VARCHAR(255)  NULL,
+        ar_hosp                   SMALLINT      NOT NULL DEFAULT 1,  
+        hosp_detail               VARCHAR(255)  NULL,
+        ar_med                    SMALLINT      NOT NULL DEFAULT 1,  
+        med_detail                VARCHAR(255)  NULL,
+        ar_tob                    SMALLINT      NOT NULL DEFAULT 1,   
+        ar_drug                   SMALLINT      NOT NULL DEFAULT 1,   
+        ar_all                    SMALLINT      NOT NULL DEFAULT 1,   
+
+        allergies                 TEXT          NULL,                 
+        allergy_others            VARCHAR(100)  NULL,
+
+        bleeding_time             VARCHAR(50)   NULL,
+
+       
+        ar_preg                   SMALLINT      NULL,                 
+        ar_nurs                   SMALLINT      NULL,                 
+        ar_bcp                    SMALLINT      NULL,                
+
+        -- Blood info
+        blood_type                VARCHAR(10)   NULL,
+        blood_pressure            VARCHAR(20)   NULL,
+
+        
+        med_conds                 TEXT          NULL,               
+        med_conds_other           VARCHAR(255)  NULL,
+
+        
+        status                    VARCHAR(20)   NOT NULL DEFAULT 'single',
+
+        created_at                TIMESTAMP     NOT NULL DEFAULT NOW(),
+        updated_at                TIMESTAMP     NOT NULL DEFAULT NOW(),
+
+        PRIMARY KEY (id)
+      );
+    `;
       await this.dataSource.query(query);
       this.logger.log('patients table created successfully');
     } catch (error) {
       this.logger.error('Error creating patients table', error);
     }
+  }
+
+  /**
+   * Adds / migrates all new columns on an already-existing patients table.
+   * Safe to run multiple times (checks information_schema first).
+   */
+  async patientHealthQuestionsMigration() {
+    const columns: Array<{ name: string; definition: string }> = [
+      // Basic
+      { name: 'birthdate', definition: 'DATE NULL' },
+      { name: 'sex', definition: 'VARCHAR(1) NULL' },
+      { name: 'nickname', definition: 'VARCHAR(100) NULL' },
+      { name: 'religion', definition: 'VARCHAR(100) NULL' },
+      { name: 'nationality', definition: 'VARCHAR(100) NULL' },
+      { name: 'address', definition: 'VARCHAR(255) NULL' },
+      { name: 'home_no', definition: 'VARCHAR(30) NULL' },
+      { name: 'office_no', definition: 'VARCHAR(30) NULL' },
+      { name: 'fax_no', definition: 'VARCHAR(30) NULL' },
+      { name: 'email', definition: 'VARCHAR(150) NULL' },
+      { name: 'dental_insurance', definition: 'VARCHAR(150) NULL' },
+      { name: 'effective_date', definition: 'DATE NULL' },
+
+      // Minors
+      { name: 'parent_guardian_name', definition: 'VARCHAR(150) NULL' },
+      { name: 'parent_occupation', definition: 'VARCHAR(100) NULL' },
+      { name: 'referred_by', definition: 'VARCHAR(255) NULL' },
+      { name: 'reason_for_consultation', definition: 'VARCHAR(255) NULL' },
+
+      // Dental History
+      { name: 'prev_dentist', definition: 'VARCHAR(150) NULL' },
+      { name: 'last_dental_visit', definition: 'VARCHAR(100) NULL' },
+
+      // Physician
+      { name: 'physician_name', definition: 'VARCHAR(150) NULL' },
+      { name: 'physician_specialty', definition: 'VARCHAR(100) NULL' },
+      { name: 'physician_office_address', definition: 'VARCHAR(255) NULL' },
+      { name: 'physician_office_no', definition: 'VARCHAR(30) NULL' },
+
+      // Yes / No (0 = Yes, 1 = No)
+      { name: 'ar_gh', definition: 'SMALLINT NOT NULL DEFAULT 1' },
+      { name: 'ar_umt', definition: 'SMALLINT NOT NULL DEFAULT 1' },
+      { name: 'umt_cond', definition: 'VARCHAR(255) NULL' },
+      { name: 'ar_sio', definition: 'SMALLINT NOT NULL DEFAULT 1' },
+      { name: 'sio_detail', definition: 'VARCHAR(255) NULL' },
+      { name: 'ar_hosp', definition: 'SMALLINT NOT NULL DEFAULT 1' },
+      { name: 'hosp_detail', definition: 'VARCHAR(255) NULL' },
+      { name: 'ar_med', definition: 'SMALLINT NOT NULL DEFAULT 1' },
+      { name: 'med_detail', definition: 'VARCHAR(255) NULL' },
+      { name: 'ar_tob', definition: 'SMALLINT NOT NULL DEFAULT 1' },
+      { name: 'ar_drug', definition: 'SMALLINT NOT NULL DEFAULT 1' },
+      { name: 'ar_all', definition: 'SMALLINT NOT NULL DEFAULT 1' },
+
+      // Allergies
+      { name: 'allergies', definition: 'TEXT NULL' },
+      { name: 'allergy_others', definition: 'VARCHAR(100) NULL' },
+      { name: 'bleeding_time', definition: 'VARCHAR(50) NULL' },
+
+      // Women only
+      { name: 'ar_preg', definition: 'SMALLINT NULL' },
+      { name: 'ar_nurs', definition: 'SMALLINT NULL' },
+      { name: 'ar_bcp', definition: 'SMALLINT NULL' },
+
+      // Blood
+      { name: 'blood_type', definition: 'VARCHAR(10) NULL' },
+      { name: 'blood_pressure', definition: 'VARCHAR(20) NULL' },
+
+      // Medical conditions
+      { name: 'med_conds', definition: 'TEXT NULL' },
+      { name: 'med_conds_other', definition: 'VARCHAR(255) NULL' },
+    ];
+
+    for (const col of columns) {
+      try {
+        const check = await this.dataSource.query(`
+        SELECT COUNT(*) as count
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'patients'
+          AND column_name = '${col.name}'
+      `);
+
+        if (Number(check[0].count) === 0) {
+          await this.dataSource.query(`
+          ALTER TABLE patients ADD COLUMN ${col.name} ${col.definition};
+        `);
+          this.logger.log(`patients.${col.name} column added`);
+        }
+      } catch (error) {
+        this.logger.error(`Error migrating patients.${col.name}`, error);
+      }
+    }
+
+    // Optional: drop the old health-question columns if they still exist
+    // const oldColumns = [
+    //   'ar_sinus_trouble',
+    //   'ar_headaches',
+    //   'ar_freq_colds',
+    //   'ar_allergies',
+    //   'ar_diabetes',
+    //   'ar_bleeding_gums',
+    //   'ar_self_medication',
+    //   'ar_heart_bp',
+    //   'complain',
+    // ];
+
+    // for (const oldCol of oldColumns) {
+    //   try {
+    //     const check = await this.dataSource.query(`
+    //     SELECT COUNT(*) as count
+    //     FROM information_schema.columns
+    //     WHERE table_schema = 'public'
+    //       AND table_name = 'patients'
+    //       AND column_name = '${oldCol}'
+    //   `);
+
+    //     if (Number(check[0].count) > 0) {
+    //       await this.dataSource.query(`
+    //       ALTER TABLE patients DROP COLUMN IF EXISTS ${oldCol};
+    //     `);
+    //       this.logger.log(`patients.${oldCol} (old) column dropped`);
+    //     }
+    //   } catch (error) {
+    //     this.logger.error(
+    //       `Error dropping old column patients.${oldCol}`,
+    //       error,
+    //     );
+    //   }
+    // }
+
+    // Make sure the original required columns that may have changed nullability are handled
+    // (address, cellphone_number, age, occupation are now nullable in the new design)
+    try {
+      await this.dataSource.query(`
+      ALTER TABLE patients
+        ALTER COLUMN address DROP NOT NULL,
+        ALTER COLUMN cellphone_number DROP NOT NULL,
+        ALTER COLUMN age DROP NOT NULL,
+        ALTER COLUMN occupation DROP NOT NULL;
+    `);
+      this.logger.log(
+        'patients – relaxed NOT NULL constraints on legacy columns',
+      );
+    } catch (error) {
+      // ignore if already nullable or column names differ
+    }
+
+    this.logger.log('Patient health questions migration completed');
   }
 
   async appointmentsTable() {

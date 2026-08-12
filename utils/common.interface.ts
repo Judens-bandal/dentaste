@@ -1,7 +1,12 @@
 import { Request } from 'express';
 import { EPermissions, ERole } from './common.enum';
 import { JwtPayload } from '../src/auth/common/jwt-payload.interface';
-import { EPatientStatus } from '../src/patient/enum/enum';
+import {
+  EAllergy,
+  EMedicalCondition,
+  EPatientStatus,
+  ESex,
+} from '../src/patient/enum/enum';
 import {
   EAppointmentStatus,
   EBranch,
@@ -72,12 +77,11 @@ export interface IAppointment {
     last_name: string;
     first_name: string;
     middle_name?: string | null;
-    cellphone_number: string;
-    address: string;
-    occupation: string;
-    age: number;
+    cellphone_number: string | null;
+    address: string | null;
+    occupation: string | null;
+    age: number | null;
     status: EPatientStatus;
-    complain?: string | null;
   };
   branch: EBranch;
   service: EDentalService | null;
@@ -92,19 +96,73 @@ export interface IAppointment {
 
 export type IAppointments = IAppointment;
 
+// export interface IPatient {
+//   id?: string;
+//   last_name?: string;
+//   first_name?: string;
+//   middle_name?: string | null;
+//   address: string;
+//   cellphone_number: string;
+//   age: number;
+//   occupation: string;
+//   status: EPatientStatus;
+//   complain?: string | null;
+// }
 export interface IPatient {
   id?: string;
   last_name?: string;
   first_name?: string;
   middle_name?: string | null;
-  address: string;
-  cellphone_number: string;
-  age: number;
-  occupation: string;
-  status: EPatientStatus;
+  birthdate?: string | null;
+  age?: number | null;
+  sex?: ESex | null;
+  nickname?: string | null;
+  religion?: string | null;
+  nationality?: string | null;
+  address?: string | null;
+  home_no?: string | null;
+  office_no?: string | null;
+  fax_no?: string | null;
+  cellphone_number?: string | null;
+  email?: string | null;
+  occupation?: string | null;
+  dental_insurance?: string | null;
+  effective_date?: string | null;
+  parent_guardian_name?: string | null;
+  parent_occupation?: string | null;
+  referred_by?: string | null;
+  reason_for_consultation?: string | null;
+  prev_dentist?: string | null;
+  last_dental_visit?: string | null;
+  physician_name?: string | null;
+  physician_specialty?: string | null;
+  physician_office_address?: string | null;
+  physician_office_no?: string | null;
+  ar_gh?: number;
+  ar_umt?: number;
+  umt_cond?: string | null;
+  ar_sio?: number;
+  sio_detail?: string | null;
+  ar_hosp?: number;
+  hosp_detail?: string | null;
+  ar_med?: number;
+  med_detail?: string | null;
+  ar_tob?: number;
+  ar_drug?: number;
+  ar_all?: number;
+  allergies?: EAllergy[] | null;
+  allergy_others?: string | null;
+  bleeding_time?: string | null;
+  ar_preg?: number | null;
+  ar_nurs?: number | null;
+  ar_bcp?: number | null;
+  blood_type?: string | null;
+  blood_pressure?: string | null;
+  med_conds?: EMedicalCondition[] | null;
+  med_conds_other?: string | null;
   complain?: string | null;
+  status?: EPatientStatus;
 }
-
 export interface IPayment {
   appointment: {
     service: EDentalService | null;
