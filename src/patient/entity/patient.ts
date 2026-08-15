@@ -1,62 +1,3 @@
-// // patients/patient.entity.ts
-// import {
-//   Entity,
-//   PrimaryGeneratedColumn,
-//   Column,
-//   CreateDateColumn,
-//   UpdateDateColumn,
-//   OneToMany,
-// } from 'typeorm';
-// import { EPatientStatus } from '../enum/enum';
-
-// import { Transform } from 'class-transformer';
-// import { transformDateToISOString } from '../../../utils/common.helper';
-// import { Appointment } from '../../appointment/entity/appointment';
-
-// @Entity('patients')
-// export class Patient {
-//   @PrimaryGeneratedColumn('uuid')
-//   id: string;
-
-//   @Column({ type: 'varchar', length: 150 })
-//   last_name: string;
-
-//   @Column({ type: 'varchar', length: 150 })
-//   first_name: string;
-
-//   @Column({ type: 'varchar', length: 150, nullable: true })
-//   middle_name: string | null;
-
-//   @Column({ type: 'varchar', length: 255 })
-//   address: string;
-
-//   @Column({ name: 'cellphone_number', type: 'varchar', length: 20 })
-//   cellphone_number: string;
-
-//   @Column({ type: 'int' })
-//   age: number;
-
-//   @Column({ type: 'varchar', length: 100 })
-//   occupation: string;
-
-//   @Column({ type: 'varchar', length: 255, nullable: true })
-//   complain: string | null;
-
-//   @Column({ type: 'varchar', length: 20, default: EPatientStatus.SINGLE })
-//   status: EPatientStatus;
-
-//   @CreateDateColumn({ name: 'created_at' })
-//   @Transform(transformDateToISOString)
-//   created_at: Date;
-
-//   @UpdateDateColumn({ name: 'updated_at' })
-//   @Transform(transformDateToISOString)
-//   updated_at: Date;
-
-//   @OneToMany(() => Appointment, (appointment) => appointment.patient)
-//   appointments: Appointment[];
-// }
-
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -90,17 +31,11 @@ export class Patient {
   @Column({ type: 'varchar', length: 150, nullable: true })
   middle_name: string | null;
 
-  @Column({ type: 'date', nullable: true })
-  birthdate: string | null; // mm/dd/yy stored as ISO date
-
   @Column({ type: 'int', nullable: true })
   age: number | null;
 
-  @Column({ type: 'enum', enum: ESex, nullable: true })
-  sex: ESex | null; // M / F
-
-  @Column({ type: 'varchar', length: 100, nullable: true })
-  nickname: string | null;
+  @Column({ type: 'date', nullable: true })
+  birthdate: string | null; // mm/dd/yy stored as ISO date
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   religion: string | null;
@@ -110,6 +45,21 @@ export class Patient {
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   address: string | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  occupation: string | null;
+
+  @Column({ type: 'varchar', length: 150, nullable: true })
+  dental_insurance: string | null;
+
+  @Column({ type: 'date', nullable: true })
+  effective_date: string | null;
+
+  @Column({ type: 'enum', enum: ESex, nullable: true })
+  sex: ESex | null; // M / F
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  nickname: string | null;
 
   @Column({ type: 'varchar', length: 30, nullable: true })
   home_no: string | null;
@@ -130,15 +80,6 @@ export class Patient {
 
   @Column({ type: 'varchar', length: 150, nullable: true })
   email: string | null;
-
-  @Column({ type: 'varchar', length: 100, nullable: true })
-  occupation: string | null;
-
-  @Column({ type: 'varchar', length: 150, nullable: true })
-  dental_insurance: string | null;
-
-  @Column({ type: 'date', nullable: true })
-  effective_date: string | null;
 
   // ─── For Minors ──────────────────────────────────────────────────────────
   @Column({ type: 'varchar', length: 150, nullable: true })

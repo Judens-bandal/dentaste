@@ -96,18 +96,6 @@ export interface IAppointment {
 
 export type IAppointments = IAppointment;
 
-// export interface IPatient {
-//   id?: string;
-//   last_name?: string;
-//   first_name?: string;
-//   middle_name?: string | null;
-//   address: string;
-//   cellphone_number: string;
-//   age: number;
-//   occupation: string;
-//   status: EPatientStatus;
-//   complain?: string | null;
-// }
 export interface IPatient {
   id?: string;
   last_name?: string;
@@ -160,7 +148,6 @@ export interface IPatient {
   blood_pressure?: string | null;
   med_conds?: EMedicalCondition[] | null;
   med_conds_other?: string | null;
-  complain?: string | null;
   status?: EPatientStatus;
 }
 export interface IPayment {

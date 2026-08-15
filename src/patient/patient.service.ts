@@ -54,7 +54,7 @@ export class PatientService {
       }
       const patient = await this.patientRepository.find({
         select: {
-          // id: true,
+          id: true,
           last_name: true,
           first_name: true,
           middle_name: true,
