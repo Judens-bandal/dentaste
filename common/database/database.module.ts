@@ -46,6 +46,7 @@ import { User } from '../../src/auth/common/entity/user';
 import { Patient } from '../../src/patient/entity/patient';
 import { Appointment } from '../../src/appointment/entity/appointment';
 import { Payment } from '../../src/payment/entity/payment';
+import { IntraoralExam } from 'src/intraoral-exam/entity/intraoral-exam';
 // Add more entities later: Patient, Appointment, Notification, etc.
 
 @Module({
@@ -62,7 +63,7 @@ import { Payment } from '../../src/payment/entity/payment';
       useFactory: (configService: ConfigService) => ({
         type: 'postgres',
         autoLoadEntities: true,
-        synchronize: false, // Never true in production!
+        synchronize: false,
         // logging: configService.get<string>('NODE_ENV') === 'development',
 
         host: configService.get<string>('DB_HOST'),
@@ -82,7 +83,7 @@ import { Payment } from '../../src/payment/entity/payment';
           connectionTimeoutMillis: 10000,
         },
 
-        entities: [User, Patient, Appointment, Payment], // Add all your entities here
+        entities: [User, Patient, Appointment, Payment, IntraoralExam], // Add all your entities here
       }),
     }),
   ],
