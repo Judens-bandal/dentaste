@@ -23,6 +23,8 @@ import { configValidationSchema } from '../common/database/config.schema';
 import { UsersModule } from './users/users.module';
 import { SystemmaintenanceModule } from './systemmaintenance/systemmaintenance.module';
 import { MaintenanceGuard } from './systemmaintenance/common/guards/maintenance.guard';
+import { ToothRecordsModule } from './tooth-records/tooth-records.module';
+import { IntraoralExamModule } from './intraoral-exam/intraoral-exam.module';
 
 @Module({
   imports: [
@@ -71,6 +73,10 @@ import { MaintenanceGuard } from './systemmaintenance/common/guards/maintenance.
     UsersModule,
 
     SystemmaintenanceModule,
+
+    ToothRecordsModule,
+
+    IntraoralExamModule,
   ],
 
   providers: [

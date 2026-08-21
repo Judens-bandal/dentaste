@@ -198,7 +198,7 @@ export class AppointmentService {
     }
 
     try {
-      const { id } = extractUser(req, dto);
+      const { id } = extractUser(req);
 
       if (!id) {
         response.data = { code: ErrorCode.MISSING_ID };

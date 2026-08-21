@@ -166,6 +166,8 @@ export enum EAdminNotification {
 }
 
 export enum EDoctorNotification {
+  TOOTH_RECORD_UPDATED = 'Tooth record updated',
+  INTRAORAL_EXAM_CREATED = 'Intraoral exam created',
   PATIENT_CREATED = 'New patient registered',
   PATIENT_UPDATED = 'Patient updated',
   PATIENT_DELETED = 'Patient deleted',

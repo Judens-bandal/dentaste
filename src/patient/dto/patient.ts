@@ -111,7 +111,7 @@ export class CreatePatientDto {
 
   @IsOptional()
   @IsDateString()
-  effective_date?: string;
+  effective_date?: string | null;
 
   // Minors
   @IsOptional()

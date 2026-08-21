@@ -18,7 +18,9 @@ export class DatabaseService implements OnApplicationBootstrap {
     // await this.appointmentServiceColumnsMigration();
     // // await this.patientsMigration();
     // // await this.appointmentScheduledAtTypeMigration();
-    await this.paymentsTable();
+    // await this.paymentsTable();
+    await this.toothRecordsTable();
+    await this.intraoralExamsTable();
   }
 
   // gen_random_uuid() lives in pgcrypto on Postgres < 14 — it's built into
@@ -30,6 +32,68 @@ export class DatabaseService implements OnApplicationBootstrap {
       this.logger.log('pgcrypto extension enabled successfully');
     } catch (error) {
       this.logger.error('Error enabling pgcrypto extension', error);
+    }
+  }
+
+  // add to database.service.ts, alongside paymentsTable()/appointmentsTable()
+  async toothRecordsTable() {
+    try {
+      const query = `
+        CREATE TABLE IF NOT EXISTS tooth_records (
+          id            CHAR(36)      NOT NULL DEFAULT gen_random_uuid(),
+          patient_id    CHAR(36)      NOT NULL,
+          tooth_number  SMALLINT      NOT NULL,
+          condition     VARCHAR(30)   NOT NULL,
+          remarks       VARCHAR(255)  NULL,
+          created_at    TIMESTAMP     NOT NULL DEFAULT NOW(),
+          updated_at    TIMESTAMP     NOT NULL DEFAULT NOW(),
+          PRIMARY KEY (id),
+          CONSTRAINT fk_tooth_record_patient
+            FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+          CONSTRAINT uq_tooth_record_patient_tooth
+            UNIQUE (patient_id, tooth_number)
+        );
+      `;
+      await this.dataSource.query(query);
+      this.logger.log('tooth_records table created successfully');
+    } catch (error) {
+      this.logger.error('Error creating tooth_records table', error);
+    }
+  }
+
+  async intraoralExamsTable() {
+    try {
+      const query = `
+        CREATE TABLE IF NOT EXISTS intraoral_exams (
+          id                      CHAR(36)      NOT NULL DEFAULT gen_random_uuid(),
+          patient_id              CHAR(36)      NOT NULL,
+          exam_date               DATE          NOT NULL,
+
+          -- simple-array columns stored as TEXT (comma-separated)
+          periodontal             TEXT          NULL,
+          occlusion               TEXT          NULL,
+          appliances              TEXT          NULL,
+          appliances_other        VARCHAR(255)  NULL,
+          tmd                     TEXT          NULL,
+          xray_taken              TEXT          NULL,
+
+          xray_periapical_teeth   VARCHAR(100)  NULL,
+          xray_others             VARCHAR(255)  NULL,
+
+          created_at              TIMESTAMP     NOT NULL DEFAULT NOW(),
+
+          PRIMARY KEY (id),
+          CONSTRAINT fk_intraoral_exam_patient
+            FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
+        );
+      `;
+      await this.dataSource.query(query);
+      await this.dataSource.query(
+        `ALTER TABLE intraoral_exams ADD COLUMN IF NOT EXISTS tooth_records JSONB NULL;`,
+      );
+      this.logger.log('intraoral_exams table created successfully');
+    } catch (error) {
+      this.logger.error('Error creating intraoral_exams table', error);
     }
   }
 
@@ -786,6 +850,33 @@ export class DatabaseService implements OnApplicationBootstrap {
         name: 'idx_appointments_status',
         table: 'appointments',
         sql: 'CREATE INDEX idx_appointments_status ON appointments (appointment_status)',
+      },
+      // ── tooth_records ────────────────────────────────────────────────────
+      {
+        name: 'idx_tooth_records_patient',
+        sql: 'CREATE INDEX idx_tooth_records_patient ON tooth_records (patient_id)',
+      },
+      {
+        name: 'idx_tooth_records_patient_tooth',
+        sql: 'CREATE INDEX idx_tooth_records_patient_tooth ON tooth_records (patient_id, tooth_number)',
+      },
+      {
+        name: 'idx_tooth_records_condition',
+        sql: 'CREATE INDEX idx_tooth_records_condition ON tooth_records (condition)',
+      },
+
+      // ── intraoral_exams ──────────────────────────────────────────────────
+      {
+        name: 'idx_intraoral_exams_patient',
+        sql: 'CREATE INDEX idx_intraoral_exams_patient ON intraoral_exams (patient_id)',
+      },
+      {
+        name: 'idx_intraoral_exams_exam_date',
+        sql: 'CREATE INDEX idx_intraoral_exams_exam_date ON intraoral_exams (exam_date)',
+      },
+      {
+        name: 'idx_intraoral_exams_patient_date',
+        sql: 'CREATE INDEX idx_intraoral_exams_patient_date ON intraoral_exams (patient_id, exam_date)',
       },
     ];
 

@@ -121,6 +121,9 @@ import {
 } from '../enum/appointment';
 
 export class CreateAppointmentDto {
+  @IsUUID()
+  patient_id: string;
+
   @IsEnum(EBranch)
   branch: EBranch;
 
