@@ -2,7 +2,11 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { Patient } from './entity/patient';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ICustomRequest, IResponse } from '../../utils/common.interface';
+import {
+  ICustomRequest,
+  IPatient,
+  IResponse,
+} from '../../utils/common.interface';
 import { Response } from 'express';
 import { ErrorCode } from '../../utils/common.enum';
 import { expressResponse, extractUser } from '../../utils/common.helper';
@@ -20,6 +24,7 @@ import {
 } from '../notification/common/notification.helper';
 import { PATIENT_TTL } from '../redis/redis.ttl';
 import { DeleteAppointmentDto } from '../appointment/dto/appointment';
+import { EPatientStatus } from './enum/enum';
 
 @Injectable()
 export class PatientService {
@@ -41,7 +46,7 @@ export class PatientService {
         return;
       }
       const cachekey = patientsKey();
-      const cacheData = await this.redis.get<Patient[]>(cachekey);
+      const cacheData = await this.redis.get<IPatient[]>(cachekey);
       if (cacheData) {
         response.data = { code: 0, data: cacheData };
         response.code = HttpStatus.OK;
@@ -53,14 +58,56 @@ export class PatientService {
           last_name: true,
           first_name: true,
           middle_name: true,
-          address: true,
-          cellphone_number: true,
+          birthdate: true,
           age: true,
+          sex: true,
+          nickname: true,
+          religion: true,
+          nationality: true,
+          address: true,
+          home_no: true,
+          office_no: true,
+          fax_no: true,
+          cellphone_number: true,
+          email: true,
           occupation: true,
-          complain: true,
+          dental_insurance: true,
+          effective_date: true,
+          parent_guardian_name: true,
+          parent_occupation: true,
+          referred_by: true,
+          reason_for_consultation: true,
+          prev_dentist: true,
+          last_dental_visit: true,
+          physician_name: true,
+          physician_specialty: true,
+          physician_office_address: true,
+          physician_office_no: true,
+          ar_gh: true,
+          ar_umt: true,
+          umt_cond: true,
+          ar_sio: true,
+          sio_detail: true,
+          ar_hosp: true,
+          hosp_detail: true,
+          ar_med: true,
+          med_detail: true,
+          ar_tob: true,
+          ar_drug: true,
+          ar_all: true,
+          allergies: true,
+          allergy_others: true,
+          bleeding_time: true,
+          ar_preg: true,
+          ar_nurs: true,
+          ar_bcp: true,
+          blood_type: true,
+          blood_pressure: true,
+          med_conds: true,
+          med_conds_other: true,
           status: true,
           created_at: true,
-          // updatedAt: true,
+          // updated_at: true,
         },
       });
       await this.redis.set(cachekey, patient, PATIENT_TTL);
@@ -92,16 +139,76 @@ export class PatientService {
         response.code = HttpStatus.BAD_REQUEST;
         return;
       }
+      // inside addPatient / updatePatient – map all new fields
+
       const patient = this.patientRepository.create({
         last_name: dto.last_name,
         first_name: dto.first_name,
-        middle_name: dto.middle_name,
-        address: dto.address,
-        cellphone_number: dto.cellphone_number,
-        age: dto.age,
-        occupation: dto.occupation,
-        status: dto.status,
-        complain: dto.complain,
+        middle_name: dto.middle_name ?? null,
+        birthdate: dto.birthdate ?? null,
+        age: dto.age ?? null,
+        sex: dto.sex ?? null,
+        nickname: dto.nickname ?? null,
+        religion: dto.religion ?? null,
+        nationality: dto.nationality ?? null,
+        address: dto.address ?? null,
+        home_no: dto.home_no ?? null,
+        office_no: dto.office_no ?? null,
+        fax_no: dto.fax_no ?? null,
+        cellphone_number: dto.cellphone_number ?? null,
+        email: dto.email ?? null,
+        occupation: dto.occupation ?? null,
+        dental_insurance: dto.dental_insurance ?? null,
+        effective_date: dto.effective_date ?? null,
+
+        // minors
+        parent_guardian_name: dto.parent_guardian_name ?? null,
+        parent_occupation: dto.parent_occupation ?? null,
+        referred_by: dto.referred_by ?? null,
+        reason_for_consultation: dto.reason_for_consultation ?? null,
+
+        // dental history
+        prev_dentist: dto.prev_dentist ?? null,
+        last_dental_visit: dto.last_dental_visit ?? null,
+
+        // physician
+        physician_name: dto.physician_name ?? null,
+        physician_specialty: dto.physician_specialty ?? null,
+        physician_office_address: dto.physician_office_address ?? null,
+        physician_office_no: dto.physician_office_no ?? null,
+
+        // yes/no (default 1 = No)
+        ar_gh: dto.ar_gh ?? 1,
+        ar_umt: dto.ar_umt ?? 1,
+        umt_cond: dto.umt_cond ?? null,
+        ar_sio: dto.ar_sio ?? 1,
+        sio_detail: dto.sio_detail ?? null,
+        ar_hosp: dto.ar_hosp ?? 1,
+        hosp_detail: dto.hosp_detail ?? null,
+        ar_med: dto.ar_med ?? 1,
+        med_detail: dto.med_detail ?? null,
+        ar_tob: dto.ar_tob ?? 1,
+        ar_drug: dto.ar_drug ?? 1,
+        ar_all: dto.ar_all ?? 1,
+        allergies: dto.allergies ?? null,
+        allergy_others: dto.allergy_others ?? null,
+        bleeding_time: dto.bleeding_time ?? null,
+
+        // women
+        ar_preg: dto.ar_preg ?? null,
+        ar_nurs: dto.ar_nurs ?? null,
+        ar_bcp: dto.ar_bcp ?? null,
+
+        // blood
+        blood_type: dto.blood_type ?? null,
+        blood_pressure: dto.blood_pressure ?? null,
+
+        // conditions
+        med_conds: dto.med_conds ?? null,
+        med_conds_other: dto.med_conds_other ?? null,
+
+        // existing
+        status: dto.status ?? EPatientStatus.SINGLE,
       });
 
       await this.patientRepository.save(patient);
@@ -159,13 +266,71 @@ export class PatientService {
       const patient: Partial<Patient> = {
         last_name: dto.last_name,
         first_name: dto.first_name,
-        middle_name: dto.middle_name,
-        address: dto.address,
-        cellphone_number: dto.cellphone_number,
-        age: dto.age,
-        occupation: dto.occupation,
-        status: dto.status,
-        complain: dto.complain,
+        middle_name: dto.middle_name ?? null,
+        birthdate: dto.birthdate ?? null,
+        age: dto.age ?? null,
+        sex: dto.sex ?? null,
+        nickname: dto.nickname ?? null,
+        religion: dto.religion ?? null,
+        nationality: dto.nationality ?? null,
+        address: dto.address ?? null,
+        home_no: dto.home_no ?? null,
+        office_no: dto.office_no ?? null,
+        fax_no: dto.fax_no ?? null,
+        cellphone_number: dto.cellphone_number ?? null,
+        email: dto.email ?? null,
+        occupation: dto.occupation ?? null,
+        dental_insurance: dto.dental_insurance ?? null,
+        effective_date: dto.effective_date ?? null,
+
+        // minors
+        parent_guardian_name: dto.parent_guardian_name ?? null,
+        parent_occupation: dto.parent_occupation ?? null,
+        referred_by: dto.referred_by ?? null,
+        reason_for_consultation: dto.reason_for_consultation ?? null,
+
+        // dental history
+        prev_dentist: dto.prev_dentist ?? null,
+        last_dental_visit: dto.last_dental_visit ?? null,
+
+        // physician
+        physician_name: dto.physician_name ?? null,
+        physician_specialty: dto.physician_specialty ?? null,
+        physician_office_address: dto.physician_office_address ?? null,
+        physician_office_no: dto.physician_office_no ?? null,
+
+        // yes/no (default 1 = No)
+        ar_gh: dto.ar_gh ?? 1,
+        ar_umt: dto.ar_umt ?? 1,
+        umt_cond: dto.umt_cond ?? null,
+        ar_sio: dto.ar_sio ?? 1,
+        sio_detail: dto.sio_detail ?? null,
+        ar_hosp: dto.ar_hosp ?? 1,
+        hosp_detail: dto.hosp_detail ?? null,
+        ar_med: dto.ar_med ?? 1,
+        med_detail: dto.med_detail ?? null,
+        ar_tob: dto.ar_tob ?? 1,
+        ar_drug: dto.ar_drug ?? 1,
+        ar_all: dto.ar_all ?? 1,
+        allergies: dto.allergies ?? null,
+        allergy_others: dto.allergy_others ?? null,
+        bleeding_time: dto.bleeding_time ?? null,
+
+        // women
+        ar_preg: dto.ar_preg ?? null,
+        ar_nurs: dto.ar_nurs ?? null,
+        ar_bcp: dto.ar_bcp ?? null,
+
+        // blood
+        blood_type: dto.blood_type ?? null,
+        blood_pressure: dto.blood_pressure ?? null,
+
+        // conditions
+        med_conds: dto.med_conds ?? null,
+        med_conds_other: dto.med_conds_other ?? null,
+
+        // existing
+        status: dto.status ?? EPatientStatus.SINGLE,
       };
 
       await this.patientRepository.update({ id: dto.id }, patient);

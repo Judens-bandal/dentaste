@@ -121,9 +121,6 @@ import {
 } from '../enum/appointment';
 
 export class CreateAppointmentDto {
-  @Optional()
-  id: string;
-
   @IsUUID()
   patient_id: string;
 
@@ -209,7 +206,7 @@ export class GetAppointmentDto {
 }
 
 export class DeleteAppointmentDto {
-  @IsString()
+  @IsUUID()
   id: string;
 }
 
