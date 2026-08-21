@@ -32,10 +32,6 @@ export const totalReceivedKey = (
 ) =>
   `${env()}:dentaste:payments:total_received:${dateFrom}:${dateTo}:${branch ?? 'ALL'}`;
 
-// tooth record
-export const toothRecordsKey = (patient_id: string) =>
-  `${env()}:dentaste:tooth_records:${patient_id}`;
-
 export const intraoralExamsKey = (patient_id: string) =>
   `${env()}:dentaste:intraoral_exams:${patient_id}`;
 

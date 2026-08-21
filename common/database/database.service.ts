@@ -19,8 +19,7 @@ export class DatabaseService implements OnApplicationBootstrap {
     // // await this.patientsMigration();
     // // await this.appointmentScheduledAtTypeMigration();
     // await this.paymentsTable();
-    await this.toothRecordsTable();
-    await this.intraoralExamsTable();
+    // await this.intraoralExamsTable();
   }
 
   // gen_random_uuid() lives in pgcrypto on Postgres < 14 — it's built into
@@ -32,32 +31,6 @@ export class DatabaseService implements OnApplicationBootstrap {
       this.logger.log('pgcrypto extension enabled successfully');
     } catch (error) {
       this.logger.error('Error enabling pgcrypto extension', error);
-    }
-  }
-
-  // add to database.service.ts, alongside paymentsTable()/appointmentsTable()
-  async toothRecordsTable() {
-    try {
-      const query = `
-        CREATE TABLE IF NOT EXISTS tooth_records (
-          id            CHAR(36)      NOT NULL DEFAULT gen_random_uuid(),
-          patient_id    CHAR(36)      NOT NULL,
-          tooth_number  SMALLINT      NOT NULL,
-          condition     VARCHAR(30)   NOT NULL,
-          remarks       VARCHAR(255)  NULL,
-          created_at    TIMESTAMP     NOT NULL DEFAULT NOW(),
-          updated_at    TIMESTAMP     NOT NULL DEFAULT NOW(),
-          PRIMARY KEY (id),
-          CONSTRAINT fk_tooth_record_patient
-            FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
-          CONSTRAINT uq_tooth_record_patient_tooth
-            UNIQUE (patient_id, tooth_number)
-        );
-      `;
-      await this.dataSource.query(query);
-      this.logger.log('tooth_records table created successfully');
-    } catch (error) {
-      this.logger.error('Error creating tooth_records table', error);
     }
   }
 
@@ -90,6 +63,11 @@ export class DatabaseService implements OnApplicationBootstrap {
       await this.dataSource.query(query);
       await this.dataSource.query(
         `ALTER TABLE intraoral_exams ADD COLUMN IF NOT EXISTS tooth_records JSONB NULL;`,
+      );
+      await this.dataSource.query(
+        `UPDATE intraoral_exams
+         SET tooth_records = (tooth_records #>> '{}')::jsonb
+         WHERE jsonb_typeof(tooth_records) = 'string';`,
       );
       this.logger.log('intraoral_exams table created successfully');
     } catch (error) {

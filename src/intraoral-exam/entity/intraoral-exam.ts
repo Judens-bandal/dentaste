@@ -13,7 +13,7 @@ import {
   EAppliance,
   ETmd,
   EXrayType,
-} from 'src/tooth-records/enum/enum';
+} from '../enum/enum';
 
 @Entity('intraoral_exams')
 export class IntraoralExam {

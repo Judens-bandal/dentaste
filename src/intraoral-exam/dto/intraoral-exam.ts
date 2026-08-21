@@ -19,31 +19,7 @@ import {
   EAppliance,
   ETmd,
   EXrayType,
-} from 'src/tooth-records/enum/enum';
-
-export class UpsertToothRecordDto {
-  @IsString()
-  patient_id: string;
-
-  @IsInt()
-  @Min(11)
-  @Max(85)
-  tooth_number: number;
-
-  @IsOptional()
-  @IsEnum(EToothCondition)
-  condition?: EToothCondition | null; // omitted/null = clear the tooth
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(255)
-  remarks?: string;
-}
-
-export class GetToothRecordsDto {
-  @IsString()
-  patient_id: string;
-}
+} from '../enum/enum';
 
 export class ToothRecordSnapshotDto {
   @IsInt()
