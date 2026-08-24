@@ -8,12 +8,15 @@ import {
   IsString,
   MaxLength,
   IsArray,
+  ArrayMinSize,
   IsDateString,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import {
   EToothCondition,
+  EToothArea,
   EPeriodontalScreening,
   EOcclusion,
   EAppliance,
@@ -21,14 +24,30 @@ import {
   EXrayType,
 } from '../enum/enum';
 
+export class ToothAreaSnapshotDto {
+  @IsEnum(EToothArea)
+  area: EToothArea;
+
+  @IsEnum(EToothCondition)
+  condition: EToothCondition;
+}
+
 export class ToothRecordSnapshotDto {
   @IsInt()
   @Min(11)
   @Max(85)
   tooth_number: number;
 
+  @ValidateIf((record) => !record.areas)
   @IsEnum(EToothCondition)
-  condition: EToothCondition;
+  condition?: EToothCondition;
+
+  @ValidateIf((record) => !record.condition)
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => ToothAreaSnapshotDto)
+  areas?: ToothAreaSnapshotDto[];
 
   @IsOptional()
   @IsString()
