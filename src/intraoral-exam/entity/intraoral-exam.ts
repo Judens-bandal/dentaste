@@ -9,6 +9,8 @@ import {
 import { Patient } from '../../patient/entity/patient';
 import {
   EPeriodontalScreening,
+  EToothArea,
+  EToothCondition,
   EOcclusion,
   EAppliance,
   ETmd,
@@ -57,7 +59,11 @@ export class IntraoralExam {
   @Column({ type: 'jsonb', nullable: true })
   tooth_records: Array<{
     tooth_number: number;
-    condition: string;
+    condition?: EToothCondition;
+    areas?: Array<{
+      area: EToothArea;
+      condition: EToothCondition;
+    }>;
     remarks?: string;
   }> | null;
 

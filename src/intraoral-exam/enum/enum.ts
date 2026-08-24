@@ -21,6 +21,15 @@ export enum EToothCondition {
   EXTRACTION_OTHER = 'xo',
 }
 
+export enum EToothArea {
+  MESIAL = 'mesial',
+  DISTAL = 'distal',
+  BUCCAL = 'buccal',
+  LINGUAL = 'lingual',
+  OCCLUSAL = 'occlusal',
+  INCISAL = 'incisal',
+}
+
 export enum EPeriodontalScreening {
   GINGIVITIS = 'gnvts',
   EARLY_PERIODONTITIS = 'eperio',
