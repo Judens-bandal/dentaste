@@ -1,0 +1,51 @@
+name: CI/CD
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm test -- --runInBand --passWithNoTests
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Upload application
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT || 22 }}
+          source: '.,!node_modules,!dist,!.git,!.env*,!*.log'
+          target: ${{ secrets.VPS_APP_PATH || '/var/www/dentaste-be' }}
+          strip_components: 0
+      - name: Install, generate tables, and restart
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT || 22 }}
+          script: |
+            set -e
+            cd "${{ secrets.VPS_APP_PATH || '/var/www/dentaste-be' }}"
+            npm ci
+            npm run build
+            npm prune --omit=dev
+            pm2 startOrRestart ecosystem.config.cjs --update-env
+            pm2 save

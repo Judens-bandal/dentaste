@@ -12,14 +12,23 @@ export class DatabaseService implements OnApplicationBootstrap {
   ) {}
 
   async onApplicationBootstrap() {
-    // await this.patientsTable();
-    // await this.patientHealthQuestionsMigration();
-    // await this.appointmentsTable();
-    // await this.appointmentServiceColumnsMigration();
-    // // await this.patientsMigration();
-    // // await this.appointmentScheduledAtTypeMigration();
-    // await this.paymentsTable();
-    // await this.intraoralExamsTable();
+    await this.enableExtensions();
+    await this.usersTable();
+    await this.patientsTable();
+    await this.patientHealthQuestionsMigration();
+    await this.appointmentsTable();
+    await this.appointmentServiceColumnsMigration();
+    await this.paymentsTable();
+    await this.aiSettingsTable();
+    await this.actionLogsTable();
+    await this.revenueReportsTable();
+    await this.intraoralExamsTable();
+    await this.schemaMigrations();
+    await this.appointmentColumnTypeMigration();
+    await this.appointmentStatusMigration();
+    await this.appointmentBalanceMigration();
+    await this.createIndexes();
+    this.logger.log('Database tables and migrations are ready');
   }
 
   // gen_random_uuid() lives in pgcrypto on Postgres < 14 — it's built into
@@ -829,20 +838,6 @@ export class DatabaseService implements OnApplicationBootstrap {
         table: 'appointments',
         sql: 'CREATE INDEX idx_appointments_status ON appointments (appointment_status)',
       },
-      // ── tooth_records ────────────────────────────────────────────────────
-      {
-        name: 'idx_tooth_records_patient',
-        sql: 'CREATE INDEX idx_tooth_records_patient ON tooth_records (patient_id)',
-      },
-      {
-        name: 'idx_tooth_records_patient_tooth',
-        sql: 'CREATE INDEX idx_tooth_records_patient_tooth ON tooth_records (patient_id, tooth_number)',
-      },
-      {
-        name: 'idx_tooth_records_condition',
-        sql: 'CREATE INDEX idx_tooth_records_condition ON tooth_records (condition)',
-      },
-
       // ── intraoral_exams ──────────────────────────────────────────────────
       {
         name: 'idx_intraoral_exams_patient',
