@@ -12,23 +12,23 @@ export class DatabaseService implements OnApplicationBootstrap {
   ) {}
 
   async onApplicationBootstrap() {
-    await this.enableExtensions();
-    await this.usersTable();
-    await this.patientsTable();
-    await this.patientHealthQuestionsMigration();
-    await this.appointmentsTable();
-    await this.appointmentServiceColumnsMigration();
-    await this.paymentsTable();
-    await this.aiSettingsTable();
-    await this.actionLogsTable();
-    await this.revenueReportsTable();
-    await this.intraoralExamsTable();
-    await this.schemaMigrations();
-    await this.appointmentColumnTypeMigration();
-    await this.appointmentStatusMigration();
-    await this.appointmentBalanceMigration();
-    await this.createIndexes();
-    this.logger.log('Database tables and migrations are ready');
+    // await this.enableExtensions();
+    // await this.usersTable();
+    // await this.patientsTable();
+    // await this.patientHealthQuestionsMigration();
+    // await this.appointmentsTable();
+    // await this.appointmentServiceColumnsMigration();
+    // await this.paymentsTable();
+    // await this.aiSettingsTable();
+    // await this.actionLogsTable();
+    // await this.revenueReportsTable();
+    // await this.intraoralExamsTable();
+    // await this.schemaMigrations();
+    // await this.appointmentColumnTypeMigration();
+    // await this.appointmentStatusMigration();
+    // await this.appointmentBalanceMigration();
+    // await this.createIndexes();
+    // this.logger.log('Database tables and migrations are ready');
   }
 
   // gen_random_uuid() lives in pgcrypto on Postgres < 14 — it's built into
