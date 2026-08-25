@@ -29,7 +29,11 @@ import { IntraoralExamModule } from './intraoral-exam/intraoral-exam.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: [`.env.stage.${process.env.STAGE}`],
+      envFilePath: [
+        '.env',
+        `.env.stage.${process.env.STAGE || 'prod'}`,
+        `.env.${process.env.PROD || 'prod'}`,
+      ],
       validationSchema: configValidationSchema,
       cache: true,
       expandVariables: true,
