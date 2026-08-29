@@ -30,7 +30,8 @@ import {
   appointmentKey,
   appointmentsKey,
   paymentsKey,
-  totalReceivedKey,
+  summaryVersionKey,
+  totalTransactionsKey,
 } from '../redis/redis.keys';
 import { RedisCacheService } from '../redis/redis-cach.service';
 import {
@@ -154,6 +155,8 @@ export class PaymentService {
         await this.redis.del(appointmentKey(dto.appointment_id));
         await this.redis.del(appointmentsKey());
         await this.redis.del(paymentsKey());
+        await this.redis.incr(summaryVersionKey(appointment.branch));
+        await this.redis.incr(summaryVersionKey());
 
         const patient = await this.patientRepository.findOne({
           where: { id: appointment.patient_id },
@@ -307,16 +310,25 @@ export class PaymentService {
         return;
       }
 
-      if (!rangeValidator(dto.dateFrom, dto.dateTo)) {
+      if (!rangeValidator(dto.from, dto.to)) {
         response.data = {
           code: ErrorCode.INVALID_DATE_RANGE,
-          message: '"dateFrom" must be on or before "dateTo".',
+          message: '"from" must be on or before "to".',
         };
         response.code = HttpStatus.BAD_REQUEST;
         return;
       }
 
-      const cachekey = totalReceivedKey(dto.dateFrom, dto.dateTo, dto.branch);
+      const version = Number(
+        (await this.redis.get<number>(summaryVersionKey(dto.branch))) ?? 0,
+      );
+      const cachekey = totalTransactionsKey(
+        dto.from,
+        dto.to,
+        dto.branch,
+        version,
+      );
+
       const cacheData = await this.redis.get<ITotalReceivedPayments>(cachekey);
       if (cacheData) {
         response.data = { code: 0, data: cacheData };
@@ -327,9 +339,9 @@ export class PaymentService {
       const qb = this.paymentRepository
         .createQueryBuilder('payment')
         .innerJoin('payment.appointment', 'appointment')
-        .where('payment.date_paid BETWEEN :dateFrom AND :dateTo', {
-          dateFrom: dto.dateFrom,
-          dateTo: dto.dateTo,
+        .where('payment.date_paid BETWEEN :from AND :to', {
+          from: dto.from,
+          to: dto.to,
         });
 
       if (dto.branch) {
@@ -344,8 +356,8 @@ export class PaymentService {
       const data: ITotalReceivedPayments = {
         total_received: Number(result.total) || 0,
         transaction_count: Number(result.count) || 0,
-        dateFrom: dto.dateFrom,
-        dateTo: dto.dateTo,
+        from: dto.from,
+        to: dto.to,
         branch: dto.branch ?? 'ALL',
       };
 
@@ -353,7 +365,7 @@ export class PaymentService {
       // still change as new payments land; a fully past range is safe to
       // cache much longer, since that history is settled
       const today = new Date().toISOString().split('T')[0];
-      const isOngoingRange = dto.dateTo >= today;
+      const isOngoingRange = dto.to >= today;
       const ttl = isOngoingRange ? 60 : PAYMENTS_TTL; // 1 min vs your normal TTL
 
       await this.redis.set(cachekey, data, ttl);

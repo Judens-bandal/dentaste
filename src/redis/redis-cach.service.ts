@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import Redis from 'ioredis';
 import { REDIS_CLIENT } from './redis-con.module';
@@ -49,6 +48,19 @@ export class RedisCacheService {
       if (keys.length) await this.redis.del(...keys);
     } catch (error) {
       this.logger.warn(`DEL by prefix failed for "${prefix}": ${error}`);
+    }
+  }
+
+  async incr(key: string, ttlSeconds?: number): Promise<number> {
+    try {
+      const value = await this.redis.incr(key);
+      if (ttlSeconds) {
+        await this.redis.expire(key, ttlSeconds);
+      }
+      return value;
+    } catch (error) {
+      this.logger.warn(`INCR failed for key "${key}": ${error}`);
+      return 0;
     }
   }
 }
