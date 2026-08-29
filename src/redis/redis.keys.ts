@@ -25,12 +25,23 @@ export const patientsByStatusKey = (status: string) =>
 //---summary total
 export const paymentsKey = () => `${env()}:dentaste:payments`;
 
-export const totalReceivedKey = (
-  dateFrom: string,
-  dateTo: string,
-  branch?: string,
+export const summaryVersionKey = (branch?: string) =>
+  `${env()}:dentaste:payments:summary:version:${branch ?? 'ALL'}`;
+
+export const totalTransactionsKey = (
+  from: string,
+  to: string,
+  branch: string | undefined,
+  version: number,
 ) =>
-  `${env()}:dentaste:payments:total_received:${dateFrom}:${dateTo}:${branch ?? 'ALL'}`;
+  `${env()}:dentaste:payments:summary:${from}:${to}:${branch ?? 'ALL'}:v${version}`;
+
+// export const totalReceivedKey = (
+//   dateFrom: string,
+//   dateTo: string,
+//   branch?: string,
+// ) =>
+//   `${env()}:dentaste:payments:total_received:${dateFrom}:${dateTo}:${branch ?? 'ALL'}`;
 
 export const intraoralExamsKey = (patient_id: string) =>
   `${env()}:dentaste:intraoral_exams:${patient_id}`;

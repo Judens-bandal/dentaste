@@ -37,7 +37,7 @@ export class HealthController {
     ]);
   }
 
-  // @Cron(CronExpression.EVERY_30_SECONDS)
+  @Cron(CronExpression.EVERY_30_SECONDS)
   async logHealthStatus() {
     const result = await this.health.check([
       () =>

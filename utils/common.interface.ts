@@ -171,8 +171,8 @@ export interface IPayment {
 export interface ITotalReceivedPayments {
   total_received: number;
   transaction_count: number;
-  dateFrom: string;
-  dateTo: string;
+  from: string;
+  to: string;
   branch: string;
 }
 

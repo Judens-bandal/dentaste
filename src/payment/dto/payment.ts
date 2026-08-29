@@ -12,6 +12,7 @@ import { EPaymentMode } from '../enum/payment';
 import { Optional } from '@nestjs/common';
 import { EBranch } from '../../appointment/enum/appointment';
 import { IsCustomDate } from '../../../utils/common.helper';
+import { tap } from 'rxjs/operators';
 
 export class CreatePaymentDto {
   // @Optional()
@@ -62,10 +63,10 @@ export class GetTotalPaymentsDto {
   // id?: string;
 
   @IsCustomDate()
-  dateFrom: string;
+  from: string;
 
   @IsCustomDate()
-  dateTo: string;
+  to: string;
 
   // used by getTotalReceivedPayments / getFullyPaidAppointmentsTotal to
   // filter to one branch; IGNORED by getTotalReceivedByBranch, which

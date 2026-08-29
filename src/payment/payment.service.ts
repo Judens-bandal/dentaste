@@ -30,7 +30,8 @@ import {
   appointmentKey,
   appointmentsKey,
   paymentsKey,
-  totalReceivedKey,
+  summaryVersionKey,
+  totalTransactionsKey,
 } from '../redis/redis.keys';
 import { RedisCacheService } from '../redis/redis-cach.service';
 import {
@@ -61,118 +62,6 @@ export class PaymentService {
     private readonly redis: RedisCacheService,
     private readonly notificationHelper: NotificationHelper,
   ) {}
-
-  // async createPayment(
-  //   dto: CreatePaymentDto,
-  //   req: ICustomRequest,
-  //   res: Response,
-  // ) {
-  //   const response: IResponse = { code: HttpStatus.ACCEPTED, data: null };
-  //   const queryRunner = this.dataSource.createQueryRunner();
-
-  //   try {
-  //     const { id } = extractUser(req);
-  //     if (!id) {
-  //       response.data = { code: ErrorCode.MISSING_ID };
-  //       response.code = HttpStatus.BAD_REQUEST;
-  //       return;
-  //     }
-
-  //     await queryRunner.connect();
-  //     await queryRunner.startTransaction();
-
-  //     try {
-  //       // pessimistic_write locks this appointment row until commit/rollback —
-  //       // if two payments for the SAME appointment arrive at nearly the same
-  //       // instant, the second one blocks here until the first transaction
-  //       // finishes, so it re-reads the balance AFTER the first payment
-  //       // actually landed, instead of both racing off a stale read.
-  //       const appointment = await queryRunner.manager.findOne(Appointment, {
-  //         where: { id: dto.appointmentId },
-  //         lock: { mode: 'pessimistic_write' },
-  //       });
-
-  //       if (!appointment) {
-  //         await queryRunner.rollbackTransaction();
-  //         response.data = { code: ErrorCode.APPOINTMENT_NOT_FOUND };
-  //         response.code = HttpStatus.NOT_FOUND;
-  //         return;
-  //       }
-
-  //       const currentBalance = Number(appointment.balance);
-
-  //       if (dto.amountPaid > currentBalance) {
-  //         await queryRunner.rollbackTransaction();
-  //         response.data = {
-  //           code: ErrorCode.PAYMENT_EXCEEDS_BALANCE,
-  //           message: `Payment of ${dto.amountPaid} exceeds the remaining balance of ${currentBalance}.`,
-  //         };
-  //         response.code = HttpStatus.BAD_REQUEST;
-  //         return;
-  //       }
-
-  //       const payment = queryRunner.manager.create(Payment, {
-  //         appointmentId: dto.appointmentId,
-  //         mode: dto.mode,
-  //         amountPaid: dto.amountPaid,
-  //         datePaid: dto.datePaid,
-  //       });
-
-  //       const saved = await queryRunner.manager.save(payment);
-  //       // trg_payments_recalc_balance fires here, inside this same
-  //       // transaction, recalculating appointments.balance before commit
-
-  //       await queryRunner.commitTransaction();
-
-  //       // cache invalidation happens AFTER commit — otherwise a request
-  //       // hitting the cache mid-transaction could re-populate it with the
-  //       // pre-payment balance before the commit actually lands
-  //       await this.redis.del(appointmentKey(dto.appointmentId));
-  //       await this.redis.del(appointmentsKey());
-
-  //       const patient = await this.patientRepository.findOne({
-  //         where: { id: appointment.patientId },
-  //         select: { name: true },
-  //       });
-
-  //       void this.notificationHelper.notifyDoctors(
-  //         EDoctorNotification.PAYMENT_RECEIVED,
-  //         `Payment of ${dto.amountPaid} (${dto.mode}) received for ${patient?.name ?? 'a patient'}.`,
-  //         {
-  //           // appointmentId: dto.appointmentId,
-  //           amountPaid: dto.amountPaid,
-  //           mode: dto.mode,
-  //           patientName: patient?.name,
-  //         },
-  //       );
-
-  //       response.data = { code: 0, data: saved };
-  //       response.code = HttpStatus.CREATED;
-  //     } catch (innerError) {
-  //       if (queryRunner.isTransactionActive) {
-  //         await queryRunner.rollbackTransaction();
-  //       }
-  //       throw innerError;
-  //     }
-  //   } catch (error) {
-  //     console.error('Error creating payment:', error);
-
-  //     if (error instanceof HttpException) {
-  //       const errorResponse = error.getResponse();
-  //       response.data =
-  //         typeof errorResponse === 'string'
-  //           ? { message: errorResponse }
-  //           : (errorResponse as Record<string, any>);
-  //       response.code = error.getStatus();
-  //     } else {
-  //       response.data = { code: ErrorCode.INTERNAL_SERVER_ERROR };
-  //       response.code = HttpStatus.INTERNAL_SERVER_ERROR;
-  //     }
-  //   } finally {
-  //     await queryRunner.release();
-  //     expressResponse(res, response);
-  //   }
-  // }
 
   async createPayment(
     dto: CreatePaymentDto,
@@ -266,6 +155,8 @@ export class PaymentService {
         await this.redis.del(appointmentKey(dto.appointment_id));
         await this.redis.del(appointmentsKey());
         await this.redis.del(paymentsKey());
+        await this.redis.incr(summaryVersionKey(appointment.branch));
+        await this.redis.incr(summaryVersionKey());
 
         const patient = await this.patientRepository.findOne({
           where: { id: appointment.patient_id },
@@ -419,16 +310,25 @@ export class PaymentService {
         return;
       }
 
-      if (!rangeValidator(dto.dateFrom, dto.dateTo)) {
+      if (!rangeValidator(dto.from, dto.to)) {
         response.data = {
           code: ErrorCode.INVALID_DATE_RANGE,
-          message: '"dateFrom" must be on or before "dateTo".',
+          message: '"from" must be on or before "to".',
         };
         response.code = HttpStatus.BAD_REQUEST;
         return;
       }
 
-      const cachekey = totalReceivedKey(dto.dateFrom, dto.dateTo, dto.branch);
+      const version = Number(
+        (await this.redis.get<number>(summaryVersionKey(dto.branch))) ?? 0,
+      );
+      const cachekey = totalTransactionsKey(
+        dto.from,
+        dto.to,
+        dto.branch,
+        version,
+      );
+
       const cacheData = await this.redis.get<ITotalReceivedPayments>(cachekey);
       if (cacheData) {
         response.data = { code: 0, data: cacheData };
@@ -439,9 +339,9 @@ export class PaymentService {
       const qb = this.paymentRepository
         .createQueryBuilder('payment')
         .innerJoin('payment.appointment', 'appointment')
-        .where('payment.date_paid BETWEEN :dateFrom AND :dateTo', {
-          dateFrom: dto.dateFrom,
-          dateTo: dto.dateTo,
+        .where('payment.date_paid BETWEEN :from AND :to', {
+          from: dto.from,
+          to: dto.to,
         });
 
       if (dto.branch) {
@@ -456,8 +356,8 @@ export class PaymentService {
       const data: ITotalReceivedPayments = {
         total_received: Number(result.total) || 0,
         transaction_count: Number(result.count) || 0,
-        dateFrom: dto.dateFrom,
-        dateTo: dto.dateTo,
+        from: dto.from,
+        to: dto.to,
         branch: dto.branch ?? 'ALL',
       };
 
@@ -465,7 +365,7 @@ export class PaymentService {
       // still change as new payments land; a fully past range is safe to
       // cache much longer, since that history is settled
       const today = new Date().toISOString().split('T')[0];
-      const isOngoingRange = dto.dateTo >= today;
+      const isOngoingRange = dto.to >= today;
       const ttl = isOngoingRange ? 60 : PAYMENTS_TTL; // 1 min vs your normal TTL
 
       await this.redis.set(cachekey, data, ttl);
