@@ -34,11 +34,7 @@ import type {
   ICustomRequest,
 } from '../../utils/common.interface';
 
-import {
-  EAppointmentStatus,
-  getTreatmentLabel,
-  isValidServiceType,
-} from './enum/appointment';
+import { EAppointmentStatus, isValidServiceType } from './enum/appointment';
 import { appointmentKey, appointmentsKey } from '../redis/redis.keys';
 import { Patient } from '../patient/entity/patient';
 import { ILock, RedisLock } from '../redis/redis.lock';
@@ -235,11 +231,9 @@ export class AppointmentService {
         patient_id: dto.patient_id,
         branch: dto.branch,
         scheduled_at: toManilaUTC(dto.scheduled_at),
-        service: dto.service,
-        service_type: dto.service_type ?? null,
-        treatment_done:
-          dto.treatment_done ??
-          getTreatmentLabel(dto.service, dto.service_type),
+        service: dto.service ?? '',
+        service_type: dto.service_type ?? '',
+        treatment_done: dto.treatment_done ?? '',
         amount_charge: dto.amount_charge,
         balance: dto.amount_charge,
         appointment_status: dto.appointment_status,
@@ -329,7 +323,12 @@ export class AppointmentService {
           : existing.service_type;
 
       // validate service_type belongs to the chosen service's mini-enum
-      if (!isValidServiceType(newService, newServiceType ?? undefined)) {
+      if (
+        !isValidServiceType(
+          newService || undefined,
+          newServiceType || undefined,
+        )
+      ) {
         response.data = { code: ErrorCode.INVALID_SERVICE_TYPE };
         response.code = HttpStatus.BAD_REQUEST;
         return;
@@ -394,13 +393,12 @@ export class AppointmentService {
         const appointment: Partial<Appointment> = {
           branch: newBranch,
           scheduled_at: newScheduledAt, // raw value — not formatted
-          service: newService,
-          service_type: newServiceType,
+          service: newService ?? '',
+          service_type: newServiceType ?? '',
           treatment_done:
-            dto.treatment_done ??
-            (dto.service || dto.service_type
-              ? getTreatmentLabel(newService, newServiceType ?? undefined)
-              : existing.treatment_done),
+            dto.treatment_done !== undefined
+              ? dto.treatment_done
+              : (existing.treatment_done ?? ''),
           amount_charge: newAmountCharge,
           balance: newBalance,
           appointment_status: newAppointmentStatus,

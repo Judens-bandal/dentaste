@@ -84,7 +84,7 @@ export interface IAppointment {
     status: EPatientStatus;
   };
   branch: EBranch;
-  service: EDentalService | null;
+  service: EDentalService | '' | null;
   service_type: string | null;
   treatment_done: string | null;
   scheduled_at: string;
@@ -152,7 +152,7 @@ export interface IPatient {
 }
 export interface IPayment {
   appointment: {
-    service: EDentalService | null;
+    service: EDentalService | '' | null;
     service_type: string | null;
     treatment_done: string | null;
     branch: string | null;

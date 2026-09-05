@@ -39,16 +39,16 @@ export class Appointment {
   @Column({ type: 'timestamptz', name: 'scheduled_at' })
   scheduled_at: string;
 
-  @Column({ type: 'varchar', length: 30 })
-  service: EDentalService;
+  @Column({ type: 'varchar', length: 30, nullable: true })
+  service: EDentalService | '' | null;
 
   // holds the mini-enum value (EBraceType | EDentureType | EOdontectomyType |
   // EToothExtractionType | EVeneerType) for services that have sub-choices
   @Column({ name: 'service_type', type: 'varchar', length: 30, nullable: true })
   service_type: string | null;
 
-  @Column({ name: 'treatment_done', type: 'text' })
-  treatment_done: string;
+  @Column({ name: 'treatment_done', type: 'text', nullable: true })
+  treatment_done: string | null;
 
   @Column({
     name: 'amount_charge',

@@ -65,9 +65,10 @@ export const SERVICE_TYPE_MAP: Partial<
 };
 
 export function isValidServiceType(
-  service: EDentalService,
+  service?: EDentalService,
   serviceType?: string,
 ): boolean {
+  if (!service) return !serviceType;
   const allowed = SERVICE_TYPE_MAP[service];
   if (!allowed) return !serviceType; // services without sub-choices must not receive one
   if (!serviceType) return false; // services with sub-choices require one
