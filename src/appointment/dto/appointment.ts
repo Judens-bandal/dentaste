@@ -9,6 +9,7 @@ import {
   IsBoolean,
   IsOptional,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { Optional } from '@nestjs/common';
 import { IsCustomDate, IsFutureDate } from '../../../utils/common.helper';
 import {
@@ -30,12 +31,14 @@ export class CreateAppointmentDto {
   scheduled_at: string;
 
   @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    value === '' ? undefined : value,
+  )
   @IsEnum(EDentalService)
   service?: EDentalService;
 
   // validated against SERVICE_TYPE_MAP in the service layer (depends on `service`)
   @IsOptional()
-  @IsString()
   service_type?: string;
 
   @IsOptional()
@@ -68,6 +71,9 @@ export class UpdateAppointmentDto {
   scheduled_at: string;
 
   @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    value === '' ? undefined : value,
+  )
   @IsEnum(EDentalService)
   service?: EDentalService;
 
