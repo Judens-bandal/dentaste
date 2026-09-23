@@ -12,6 +12,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<ERole, EPermissions[]> = {
     EPermissions.MANAGE_APPOINTMENTS,
     EPermissions.VIEW_PAYMENTS,
     EPermissions.MANAGE_PAYMENTS,
+    EPermissions.VIEW_PAYMENTS_TOTAL,
     EPermissions.VIEW_REPORTS,
     EPermissions.VIEW_NOTIFICATIONS,
     EPermissions.MANAGE_NOTIFICATIONS,

@@ -11,7 +11,7 @@ import {
   CreateIntraoralExamDto,
   GetIntraoralExamDto,
 } from './dto/intraoral-exam';
-import { intraoralExamsKey } from '../redis/redis.keys';
+import { intraoralExamsKey, patientRecordKey } from '../redis/redis.keys';
 import { RedisCacheService } from '../redis/redis-cach.service';
 import {
   EDoctorNotification,
@@ -81,6 +81,7 @@ export class IntraoralExamService {
 
       const exam = this.intraoralExamRepository.create({
         patient_id: dto.patient_id,
+        appointment_id: dto.appointment_id,
         exam_date: dto.exam_date,
         periodontal: dto.periodontal ?? null,
         occlusion: dto.occlusion ?? null,
@@ -94,6 +95,7 @@ export class IntraoralExamService {
       });
       await this.intraoralExamRepository.save(exam);
       await this.redis.del(intraoralExamsKey(dto.patient_id));
+      await this.redis.del(patientRecordKey(dto.patient_id));
 
       void this.notificationHelper.notifyDoctor(
         id,
@@ -134,6 +136,7 @@ export class IntraoralExamService {
 
       await this.intraoralExamRepository.delete({ id });
       await this.redis.del(intraoralExamsKey(exam.patient_id));
+      await this.redis.del(patientRecordKey(exam.patient_id));
 
       response.data = { code: 0 };
       response.code = HttpStatus.OK;

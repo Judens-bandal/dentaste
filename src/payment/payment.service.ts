@@ -29,6 +29,7 @@ import {
 import {
   appointmentKey,
   appointmentsKey,
+  patientRecordKey,
   paymentsKey,
   summaryVersionKey,
   totalTransactionsKey,
@@ -40,6 +41,7 @@ import {
 } from '../notification/common/notification.helper';
 import {
   CreatePaymentDto,
+  DeletePaymentDto,
   GetAnnualSummaryDto,
   GetPaymentDto,
   GetTotalPaymentsDto,
@@ -52,6 +54,9 @@ export class PaymentService {
   constructor(
     @InjectRepository(Payment, 'main_repo')
     private readonly paymentRepository: Repository<Payment>,
+
+    @InjectRepository(Appointment, 'main_repo')
+    private readonly appointmentRepository: Repository<Appointment>,
 
     @InjectRepository(Patient, 'main_repo')
     private readonly patientRepository: Repository<Patient>,
@@ -155,6 +160,7 @@ export class PaymentService {
         await this.redis.del(appointmentKey(dto.appointment_id));
         await this.redis.del(appointmentsKey());
         await this.redis.del(paymentsKey());
+        await this.redis.del(patientRecordKey(appointment.patient_id));
         await this.redis.incr(summaryVersionKey(appointment.branch));
         await this.redis.incr(summaryVersionKey());
 
@@ -207,6 +213,74 @@ export class PaymentService {
     }
   }
 
+  async deletePayment(
+    dto: DeletePaymentDto,
+    req: ICustomRequest,
+    res: Response,
+  ) {
+    const response: IResponse = { code: HttpStatus.ACCEPTED, data: null };
+
+    try {
+      const { id } = extractUser(req);
+      if (!id) {
+        response.data = { code: ErrorCode.MISSING_ID };
+        response.code = HttpStatus.BAD_REQUEST;
+        return;
+      }
+
+      const payment = await this.paymentRepository.findOne({
+        where: { id: dto.id },
+        relations: { appointment: true },
+      });
+
+      if (!payment) {
+        response.data = { code: ErrorCode.PAYMENT_NOT_FOUND };
+        response.code = HttpStatus.NOT_FOUND;
+        return;
+      }
+
+      const appointment = await this.appointmentRepository.findOne({
+        where: { id: payment.appointment_id },
+      });
+
+      await this.paymentRepository.delete({ id: dto.id });
+
+      if (appointment) {
+        const newBalance =
+          Number(appointment.balance) + Number(payment.amount_paid);
+        const newStatus =
+          appointment.appointment_status !== EAppointmentStatus.NO_SHOW &&
+          appointment.appointment_status !== EAppointmentStatus.CANCELLED
+            ? newBalance > 0
+              ? EAppointmentStatus.SCHEDULED
+              : EAppointmentStatus.COMPLETED
+            : appointment.appointment_status;
+
+        await this.appointmentRepository.update(
+          { id: appointment.id },
+          { balance: newBalance, appointment_status: newStatus },
+        );
+
+        await this.redis.del(appointmentKey(appointment.id));
+        await this.redis.del(patientRecordKey(appointment.patient_id));
+        await this.redis.incr(summaryVersionKey(appointment.branch));
+        await this.redis.incr(summaryVersionKey());
+      }
+
+      await this.redis.del(appointmentsKey());
+      await this.redis.del(paymentsKey());
+
+      response.data = { code: 0 };
+      response.code = HttpStatus.OK;
+    } catch (error) {
+      console.error('Error deleting payment:', error);
+      response.data = { code: ErrorCode.INTERNAL_SERVER_ERROR };
+      response.code = HttpStatus.INTERNAL_SERVER_ERROR;
+    } finally {
+      expressResponse(res, response);
+    }
+  }
+
   async getPayments(dto: GetPaymentDto, req: ICustomRequest, res: Response) {
     const response: IResponse = { code: HttpStatus.ACCEPTED, data: null };
 
@@ -233,6 +307,7 @@ export class PaymentService {
           },
         },
         select: {
+          id: true,
           mode: true,
           amount_paid: true,
           date_paid: true,
@@ -258,7 +333,7 @@ export class PaymentService {
 
       for (const payment of payments) {
         data.push({
-          // id: payment.id ?? null,
+          id: payment.id,
           appointment: {
             service: payment.appointment?.service ?? null,
             service_type: payment.appointment?.service_type ?? null,

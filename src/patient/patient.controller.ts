@@ -39,6 +39,17 @@ export class PatientController {
     await this.patientService.getAllPatients(dto, req, res);
   }
 
+  @Get('/record')
+  @Roles(ERole.DOCTOR, ERole.ASSISTANT)
+  @Permission(EPermissions.VIEW_PATIENTS)
+  async getPatientRecord(
+    @Query() dto: GetPatientDto,
+    @Req() req: ICustomRequest,
+    @Res() res: Response,
+  ) {
+    await this.patientService.getPatientRecord(dto, req, res);
+  }
+
   @Post('/create')
   @Roles(ERole.DOCTOR, ERole.ASSISTANT)
   @Permission(EPermissions.MANAGE_PATIENTS)

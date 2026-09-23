@@ -16,6 +16,7 @@ import { EAppointmentStatus, EBranch } from '../enum/appointment';
 import { Transform } from 'class-transformer';
 import { transformDateToISOString } from '../../../utils/common.helper';
 import { EDentalService } from '../enum/appointment';
+import { IntraoralExam } from 'src/intraoral-exam/entity/intraoral-exam';
 
 @Entity('appointments')
 export class Appointment {
@@ -72,6 +73,12 @@ export class Appointment {
   })
   appointment_status!: EAppointmentStatus;
 
+  @OneToMany(() => IntraoralExam, (exam) => exam.appointment)
+  intraoral_exams: IntraoralExam[];
+
+  @OneToMany(() => Payment, (payment) => payment.appointment)
+  payments: Payment[];
+
   @CreateDateColumn({ name: 'created_at' })
   @Transform(transformDateToISOString)
   created_at: Date;
@@ -79,7 +86,4 @@ export class Appointment {
   @UpdateDateColumn({ name: 'updated_at' })
   @Transform(transformDateToISOString)
   updated_at: Date;
-
-  @OneToMany(() => Payment, (payment) => payment.appointment)
-  payments: Payment[];
 }

@@ -5,6 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   ICustomRequest,
   IPatient,
+  IPatientRecord,
   IResponse,
 } from '../../utils/common.interface';
 import { Response } from 'express';
@@ -15,7 +16,7 @@ import {
   GetPatientDto,
   UpdatePatientDto,
 } from './dto/patient';
-import { patientKey, patientsKey } from '../redis/redis.keys';
+import { patientKey, patientRecordKey, patientsKey } from '../redis/redis.keys';
 import { RedisCacheService } from '../redis/redis-cach.service';
 import {
   EAdminNotification,
@@ -121,6 +122,114 @@ export class PatientService {
       response.data = { code: 0, data: patient };
       response.code = HttpStatus.OK;
     } catch (error) {
+      response.data = { code: ErrorCode.INTERNAL_SERVER_ERROR };
+      response.code = HttpStatus.INTERNAL_SERVER_ERROR;
+    } finally {
+      expressResponse(res, response);
+    }
+  }
+
+  async getPatientRecord(
+    dto: GetPatientDto,
+    req: ICustomRequest,
+    res: Response,
+  ) {
+    const response: IResponse = { code: HttpStatus.ACCEPTED, data: null };
+
+    try {
+      const { id } = extractUser(req);
+
+      if (!id) {
+        response.data = { code: ErrorCode.MISSING_ID };
+        response.code = HttpStatus.BAD_REQUEST;
+        return;
+      }
+
+      const cachekey = patientRecordKey(dto.id);
+      const cacheData = await this.redis.get<IPatientRecord[]>(cachekey);
+      if (cacheData) {
+        response.data = { code: 0, data: cacheData };
+        response.code = HttpStatus.OK;
+        return;
+      }
+      const query = `
+          SELECT
+          p.last_name,
+          p.first_name,
+          p.age,
+          p.sex,
+          a.scheduled_at::date AS scheduled_at,
+          COALESCE(t.tooth_records::text, 'N/A') AS tooth_records,
+          a.service,
+          a.service_type,
+          a.branch,
+          a.amount_charge,
+          COALESCE(py.amount_paid, 0) AS amount_paid,
+          a.balance,
+          
+          CASE 
+            WHEN a.balance = 0 AND py.amount_paid > 0 THEN 'PAID'
+            WHEN a.balance > 0 AND py.amount_paid > 0 THEN 'PARTIAL PAYMENT'
+            WHEN a.appointment_status = 'SCHEDULED' THEN 'SCHEDULED'
+            ELSE a.appointment_status
+          END AS status,
+          
+          py.date_paid,
+          
+          CASE 
+            WHEN a.appointment_status = 'SCHEDULED' THEN
+              (SELECT a_next.scheduled_at::date 
+              FROM appointments a_next
+              WHERE a_next.patient_id = p.id 
+              AND a_next.appointment_status = 'SCHEDULED'
+              ORDER BY a_next.scheduled_at ASC
+              LIMIT 1)
+            ELSE NULL
+          END AS next_appt_date,
+          
+          CASE 
+            WHEN a.appointment_status = 'SCHEDULED' THEN
+              (SELECT a_next.service 
+              FROM appointments a_next
+              WHERE a_next.patient_id = p.id 
+              AND a_next.appointment_status = 'SCHEDULED'
+              ORDER BY a_next.scheduled_at ASC
+              LIMIT 1)
+            ELSE NULL
+          END AS next_appt_procedure
+
+        FROM patients p
+        
+        INNER JOIN appointments a 
+          ON a.patient_id = p.id
+        
+        LEFT JOIN payments py 
+          ON py.appointment_id = a.id
+        
+        LEFT JOIN intraoral_exams t 
+          ON t.appointment_id = a.id
+        
+        WHERE
+          p.id = $1
+          AND (
+            (a.appointment_status = 'SCHEDULED' AND a.balance > 0)
+            OR (a.balance > 0 AND py.amount_paid > 0)
+            OR (a.balance = 0)
+          )
+        
+        ORDER BY a.scheduled_at DESC;
+      `;
+
+      const data: IPatientRecord[] = await this.patientRepository.query(query, [
+        dto.id,
+      ]);
+
+      await this.redis.set(cachekey, data);
+
+      response.data = { code: 0, data };
+      response.code = HttpStatus.OK;
+    } catch (error) {
+      console.error('Error fetching patient record:', error);
       response.data = { code: ErrorCode.INTERNAL_SERVER_ERROR };
       response.code = HttpStatus.INTERNAL_SERVER_ERROR;
     } finally {
@@ -404,15 +513,3 @@ export class PatientService {
     }
   }
 }
-
-// export interface ICustomRequest extends Request {
-//   claims?: IClaims;
-//   user?: JwtPayload; // full payload, since Passport's validate() returns the whole thing
-// }
-
-// @Injectable()
-// export class JwtStrategy extends PassportStrategy(Strategy) {
-//   async validate(payload: JwtPayload) {
-//     return payload; // whatever you return here becomes req.user
-//   }
-// }

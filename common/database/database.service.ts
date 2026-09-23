@@ -19,16 +19,9 @@ export class DatabaseService implements OnApplicationBootstrap {
     // await this.appointmentsTable();
     // await this.appointmentServiceColumnsMigration();
     // await this.paymentsTable();
-    // await this.aiSettingsTable();
-    // await this.actionLogsTable();
-    // await this.revenueReportsTable();
-    // await this.intraoralExamsTable();
-    // await this.schemaMigrations();
-    // await this.appointmentColumnTypeMigration();
-    // await this.appointmentStatusMigration();
-    // await this.appointmentBalanceMigration();
-    // await this.createIndexes();
-    // this.logger.log('Database tables and migrations are ready');
+    await this.intraoralExamsTable();
+    await this.intraoralExamsAppointmentMigration();
+    await this.createIndexes();
   }
 
   // gen_random_uuid() lives in pgcrypto on Postgres < 14 — it's built into
@@ -43,44 +36,127 @@ export class DatabaseService implements OnApplicationBootstrap {
     }
   }
 
+  // async intraoralExamsTable() {
+  //   try {
+  //     const query = `
+  //       CREATE TABLE IF NOT EXISTS intraoral_exams (
+  //         id                      CHAR(36)      NOT NULL DEFAULT gen_random_uuid(),
+  //         patient_id              CHAR(36)      NOT NULL,
+  //         exam_date               DATE          NOT NULL,
+
+  //         -- simple-array columns stored as TEXT (comma-separated)
+  //         periodontal             TEXT          NULL,
+  //         occlusion               TEXT          NULL,
+  //         appliances              TEXT          NULL,
+  //         appliances_other        VARCHAR(255)  NULL,
+  //         tmd                     TEXT          NULL,
+  //         xray_taken              TEXT          NULL,
+
+  //         xray_periapical_teeth   VARCHAR(100)  NULL,
+  //         xray_others             VARCHAR(255)  NULL,
+
+  //         created_at              TIMESTAMP     NOT NULL DEFAULT NOW(),
+
+  //         PRIMARY KEY (id),
+  //         CONSTRAINT fk_intraoral_exam_patient
+  //           FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
+  //       );
+  //     `;
+  //     await this.dataSource.query(query);
+  //     await this.dataSource.query(
+  //       `ALTER TABLE intraoral_exams ADD COLUMN IF NOT EXISTS tooth_records JSONB NULL;`,
+  //     );
+  //     await this.dataSource.query(
+  //       `UPDATE intraoral_exams
+  //        SET tooth_records = (tooth_records #>> '{}')::jsonb
+  //        WHERE jsonb_typeof(tooth_records) = 'string';`,
+  //     );
+  //     this.logger.log('intraoral_exams table created successfully');
+  //   } catch (error) {
+  //     this.logger.error('Error creating intraoral_exams table', error);
+  //   }
+  // }
+
   async intraoralExamsTable() {
     try {
       const query = `
-        CREATE TABLE IF NOT EXISTS intraoral_exams (
-          id                      CHAR(36)      NOT NULL DEFAULT gen_random_uuid(),
-          patient_id              CHAR(36)      NOT NULL,
-          exam_date               DATE          NOT NULL,
-
-          -- simple-array columns stored as TEXT (comma-separated)
-          periodontal             TEXT          NULL,
-          occlusion               TEXT          NULL,
-          appliances              TEXT          NULL,
-          appliances_other        VARCHAR(255)  NULL,
-          tmd                     TEXT          NULL,
-          xray_taken              TEXT          NULL,
-
-          xray_periapical_teeth   VARCHAR(100)  NULL,
-          xray_others             VARCHAR(255)  NULL,
-
-          created_at              TIMESTAMP     NOT NULL DEFAULT NOW(),
-
-          PRIMARY KEY (id),
-          CONSTRAINT fk_intraoral_exam_patient
-            FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
-        );
-      `;
+      CREATE TABLE IF NOT EXISTS intraoral_exams (
+        id                      CHAR(36)      NOT NULL DEFAULT gen_random_uuid(),
+        patient_id              CHAR(36)      NOT NULL,
+        exam_date               DATE          NOT NULL,
+        periodontal             TEXT          NULL,
+        occlusion               TEXT          NULL,
+        appliances              TEXT          NULL,
+        appliances_other        VARCHAR(255)  NULL,
+        tmd                     TEXT          NULL,
+        xray_taken              TEXT          NULL,
+        xray_periapical_teeth   VARCHAR(100)  NULL,
+        xray_others             VARCHAR(255)  NULL,
+        tooth_records           JSONB         NULL,
+        appointment_id          CHAR(36)      NULL,
+        created_at              TIMESTAMP     NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (id),
+        CONSTRAINT fk_intraoral_exam_patient
+          FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+        CONSTRAINT fk_intraoral_exams_appointment
+          FOREIGN KEY (appointment_id) REFERENCES appointments(id) ON DELETE SET NULL
+      );
+    `;
       await this.dataSource.query(query);
-      await this.dataSource.query(
-        `ALTER TABLE intraoral_exams ADD COLUMN IF NOT EXISTS tooth_records JSONB NULL;`,
-      );
-      await this.dataSource.query(
-        `UPDATE intraoral_exams
-         SET tooth_records = (tooth_records #>> '{}')::jsonb
-         WHERE jsonb_typeof(tooth_records) = 'string';`,
-      );
       this.logger.log('intraoral_exams table created successfully');
     } catch (error) {
       this.logger.error('Error creating intraoral_exams table', error);
+    }
+  }
+
+  async intraoralExamsAppointmentMigration() {
+    try {
+      const appointmentIdCheck = await this.dataSource.query(`
+      SELECT COUNT(*) as count
+      FROM information_schema.columns
+      WHERE table_schema = current_schema()
+      AND table_name = 'intraoral_exams'
+      AND column_name = 'appointment_id'
+    `);
+
+      if (Number(appointmentIdCheck[0].count) === 0) {
+        await this.dataSource.query(`
+        ALTER TABLE intraoral_exams 
+        ADD COLUMN appointment_id CHAR(36) NULL;
+      `);
+        this.logger.log('intraoral_exams.appointment_id column added');
+      }
+
+      const fkCheck = await this.dataSource.query(`
+      SELECT COUNT(*) as count
+      FROM information_schema.table_constraints
+      WHERE table_schema = current_schema()
+      AND table_name = 'intraoral_exams'
+      AND constraint_type = 'FOREIGN KEY'
+      AND constraint_name = 'fk_intraoral_exams_appointment'
+    `);
+
+      if (Number(fkCheck[0].count) === 0) {
+        await this.dataSource.query(`
+        ALTER TABLE intraoral_exams
+        ADD CONSTRAINT fk_intraoral_exams_appointment
+        FOREIGN KEY (appointment_id) 
+        REFERENCES appointments(id) 
+        ON DELETE SET NULL;
+      `);
+        this.logger.log(
+          'intraoral_exams appointment_id foreign key constraint added',
+        );
+      }
+
+      this.logger.log(
+        'IntraoralExams appointment migration completed successfully',
+      );
+    } catch (error) {
+      this.logger.error(
+        'Error running intraoral exams appointment migration',
+        error,
+      );
     }
   }
 
@@ -789,6 +865,10 @@ export class DatabaseService implements OnApplicationBootstrap {
   async createIndexes() {
     const indexes = [
       {
+        name: 'idx_intraoral_exams_appointment',
+        sql: 'CREATE INDEX idx_intraoral_exams_appointment ON intraoral_exams (appointment_id)',
+      },
+      {
         name: 'idx_users_role',
         table: 'users',
         sql: 'CREATE INDEX idx_users_role ON users (role)',
@@ -838,6 +918,20 @@ export class DatabaseService implements OnApplicationBootstrap {
         table: 'appointments',
         sql: 'CREATE INDEX idx_appointments_status ON appointments (appointment_status)',
       },
+      // ── tooth_records ────────────────────────────────────────────────────
+      // {
+      //   name: 'idx_tooth_records_patient',
+      //   sql: 'CREATE INDEX idx_tooth_records_patient ON tooth_records (patient_id)',
+      // },
+      // {
+      //   name: 'idx_tooth_records_patient_tooth',
+      //   sql: 'CREATE INDEX idx_tooth_records_patient_tooth ON tooth_records (patient_id, tooth_number)',
+      // },
+      // {
+      //   name: 'idx_tooth_records_condition',
+      //   sql: 'CREATE INDEX idx_tooth_records_condition ON tooth_records (condition)',
+      // },
+
       // ── intraoral_exams ──────────────────────────────────────────────────
       {
         name: 'idx_intraoral_exams_patient',

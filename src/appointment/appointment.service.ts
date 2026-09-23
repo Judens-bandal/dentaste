@@ -35,7 +35,11 @@ import type {
 } from '../../utils/common.interface';
 
 import { EAppointmentStatus, isValidServiceType } from './enum/appointment';
-import { appointmentKey, appointmentsKey } from '../redis/redis.keys';
+import {
+  appointmentKey,
+  appointmentsKey,
+  patientRecordKey,
+} from '../redis/redis.keys';
 import { Patient } from '../patient/entity/patient';
 import { ILock, RedisLock } from '../redis/redis.lock';
 import {
@@ -86,6 +90,7 @@ export class AppointmentService {
         },
         select: {
           id: true,
+          patient_id: true,
           branch: true,
           service: true,
           service_type: true,
@@ -117,6 +122,7 @@ export class AppointmentService {
 
         data.push({
           id: appointment.id ?? null,
+          patient_id: appointment.patient_id ?? null,
           patient: {
             last_name: appointment.patient?.last_name,
             first_name: appointment.patient?.first_name,
@@ -242,6 +248,7 @@ export class AppointmentService {
       const saved = await this.appointmentRepository.save(appointment);
 
       await this.redis.del(appointmentsKey());
+      await this.redis.del(patientRecordKey(dto.patient_id));
 
       const patient = await this.patientRepository.findOne({
         where: { id: saved.patient_id },

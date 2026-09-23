@@ -38,6 +38,11 @@ export class GetPaymentDto {
   id: string;
 }
 
+export class DeletePaymentDto {
+  @IsUUID()
+  id: string;
+}
+
 export class UpdatePaymentDto {
   @IsUUID()
   id: string;
