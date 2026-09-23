@@ -1,10 +1,20 @@
-import { Body, Controller, Get, Post, Query, Req, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Post,
+  Query,
+  Req,
+  Res,
+} from '@nestjs/common';
 import { PaymentService } from './payment.service';
 import {
   CreatePaymentDto,
   GetPaymentDto,
   GetTotalPaymentsDto,
 } from './dto/payment';
+import { DeletePaymentDto } from './dto/payment';
 import type { ICustomRequest } from '../../utils/common.interface';
 import type { Response } from 'express';
 import { Permission } from '../../common/commons/decorator/permissions.decorator';
@@ -29,7 +39,6 @@ export class PaymentController {
 
   @Get('/total')
   @Roles(ERole.DOCTOR)
-  @Permission(EPermissions.VIEW_PAYMENTS_TOTAL)
   async getTotalReceivedPayments(
     @Query() dto: GetTotalPaymentsDto,
     @Req() req: ICustomRequest,
@@ -47,6 +56,17 @@ export class PaymentController {
     @Res() res: Response,
   ) {
     return await this.paymentService.getPayments(dto, req, res);
+  }
+
+  @Delete('/delete')
+  @Roles(ERole.DOCTOR, ERole.ASSISTANT)
+  @Permission(EPermissions.MANAGE_PAYMENTS)
+  async delete(
+    @Body() dto: DeletePaymentDto,
+    @Req() req: ICustomRequest,
+    @Res() res: Response,
+  ) {
+    return await this.paymentService.deletePayment(dto, req, res);
   }
 
   // @Cron('*/5 * * * * *')

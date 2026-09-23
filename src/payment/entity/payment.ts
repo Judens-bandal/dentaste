@@ -16,7 +16,7 @@ export class Payment {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'appointment_id', type: 'uuid' })
+  @Column({ name: 'appointment_id', type: 'uuid', nullable: true })
   appointment_id: string;
 
   @ManyToOne(() => Appointment, (appointment) => appointment.payments, {

@@ -553,7 +553,6 @@ export class UpdatePatientDto {
 
 export class GetPatientDto {
   @IsOptional()
-  @IsString()
   @IsUUID()
-  id?: string;
+  id: string;
 }

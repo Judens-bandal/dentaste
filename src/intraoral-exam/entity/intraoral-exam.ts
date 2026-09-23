@@ -16,6 +16,7 @@ import {
   ETmd,
   EXrayType,
 } from '../enum/enum';
+import { Appointment } from 'src/appointment/entity/appointment';
 
 @Entity('intraoral_exams')
 export class IntraoralExam {
@@ -66,6 +67,16 @@ export class IntraoralExam {
     }>;
     remarks?: string;
   }> | null;
+
+  @Column({ name: 'appointment_id', type: 'uuid' })
+  appointment_id: string | null;
+
+  @ManyToOne(() => Appointment, (appointment) => appointment.intraoral_exams, {
+    onDelete: 'SET NULL',
+    nullable: true,
+  })
+  @JoinColumn({ name: 'appointment_id' }) // ← ADD THIS
+  appointment: Appointment | null;
 
   @CreateDateColumn({ name: 'created_at' })
   created_at: Date;

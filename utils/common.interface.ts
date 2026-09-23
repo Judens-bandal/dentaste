@@ -73,6 +73,7 @@ export interface IResponse {
 
 export interface IAppointment {
   id: string;
+  patient_id: string;
   patient: {
     last_name: string;
     first_name: string;
@@ -150,7 +151,28 @@ export interface IPatient {
   med_conds_other?: string | null;
   status?: EPatientStatus;
 }
+
+export interface IPatientRecord {
+  last_name: string;
+  first_name: string;
+  age: number;
+  sex: string;
+  scheduled_at: string;
+  tooth_records: string;
+  service: string;
+  service_type: string;
+  branch: string;
+  amount_charge: number;
+  amount_paid: number;
+  balance: number;
+  status: string;
+  date_paid: string | null;
+  next_appt_date: string | null;
+  next_appt_procedure: string | null;
+}
+
 export interface IPayment {
+  id: string;
   appointment: {
     service: EDentalService | '' | null;
     service_type: string | null;
