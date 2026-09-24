@@ -159,7 +159,16 @@ export class PatientService {
           p.age,
           p.sex,
           a.scheduled_at::date AS scheduled_at,
-          COALESCE(t.tooth_records::text, 'N/A') AS tooth_records,
+          COALESCE(
+            (
+              SELECT jsonb_agg(elem)
+              FROM intraoral_exams ie,
+                   jsonb_array_elements(ie.tooth_records) AS elem
+              WHERE ie.appointment_id = a.id
+                AND ie.tooth_records IS NOT NULL
+            )::text,
+            'N/A'
+          ) AS tooth_records,
           a.service,
           a.service_type,
           a.branch,
@@ -205,9 +214,6 @@ export class PatientService {
         
         LEFT JOIN payments py 
           ON py.appointment_id = a.id
-        
-        LEFT JOIN intraoral_exams t 
-          ON t.appointment_id = a.id
         
         WHERE
           p.id = $1
