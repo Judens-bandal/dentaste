@@ -59,6 +59,57 @@ $ npm run test:cov
 
 ## Deployment
 
+### Hostinger KVM VPS (without Docker)
+
+The repository includes `.github/workflows/ci-cd.yml`. Pull requests run the
+build and tests. A push to `master` uploads the source to the VPS over SSH,
+installs dependencies, builds the Nest application, and restarts it with PM2.
+
+Prepare the VPS once:
+
+```bash
+sudo apt update
+sudo apt install -y nodejs npm postgresql redis-server
+sudo npm install -g pm2
+sudo mkdir -p /var/www/dentaste-be
+sudo chown -R "$USER":"$USER" /var/www/dentaste-be
+```
+
+Create `/var/www/dentaste-be/.env.stage.prod` on the VPS. Do not commit it:
+
+```dotenv
+STAGE=prod
+PORT=5000
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_USERNAME=dentaste
+DB_PASSWORD=use-a-strong-password
+DB_DATABASE=dentaste
+JWT_SECRET=use-a-long-random-secret
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+REDIS_USERNAME=
+REDIS_PASSWORD=
+REDIS_TLS=false
+```
+
+The `DatabaseService` runs on application startup. It creates missing tables,
+applies idempotent schema migrations, and creates missing indexes. It does not
+drop existing data. The PostgreSQL database and user must already exist, and
+the database user needs permission to create tables, extensions, and indexes.
+
+Add these GitHub repository secrets:
+
+- `VPS_HOST`: VPS public IP or hostname
+- `VPS_USER`: SSH user
+- `VPS_SSH_KEY`: private SSH key for that user
+- `VPS_SSH_PORT`: SSH port, optional (`22` by default)
+- `VPS_APP_PATH`: optional, defaults to `/var/www/dentaste-be`
+
+The VPS firewall must allow the SSH port and the application/API port. Put a
+reverse proxy such as Nginx in front of port `5000` when exposing the API over
+HTTPS.
+
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
 
 If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:

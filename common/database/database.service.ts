@@ -12,12 +12,12 @@ export class DatabaseService implements OnApplicationBootstrap {
   ) {}
 
   async onApplicationBootstrap() {
+    // await this.enableExtensions();
+    // await this.usersTable();
     // await this.patientsTable();
     // await this.patientHealthQuestionsMigration();
     // await this.appointmentsTable();
     // await this.appointmentServiceColumnsMigration();
-    // // await this.patientsMigration();
-    // // await this.appointmentScheduledAtTypeMigration();
     // await this.paymentsTable();
     await this.intraoralExamsTable();
     await this.intraoralExamsAppointmentMigration();

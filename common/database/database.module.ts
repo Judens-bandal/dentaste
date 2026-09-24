@@ -15,7 +15,11 @@ import { IntraoralExam } from 'src/intraoral-exam/entity/intraoral-exam';
 @Module({
   imports: [
     ConfigModule.forRoot({
-      envFilePath: [`.env.stage.${process.env.STAGE || 'dev'}`],
+      envFilePath: [
+        '.env',
+        `.env.stage.${process.env.STAGE || 'prod'}`,
+        `.env.${process.env.PROD || 'prod'}`,
+      ],
       validationSchema: configValidationSchema,
     }),
 
