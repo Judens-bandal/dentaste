@@ -99,6 +99,7 @@ export class AppointmentService {
           appointment_status: true,
           amount_charge: true,
           balance: true,
+          updated_at: true,
           patient: {
             // id: true,
             last_name: true,
@@ -141,7 +142,10 @@ export class AppointmentService {
           amount_charger: amount_charge,
           balance,
           appointment_status: appointment.appointment_status,
-          payment_status: getPaymentStatus(amount_charge, balance), // ← fixed: use the Number()-converted locals
+          payment_status: getPaymentStatus(amount_charge, balance),
+          updated_at: appointment.updated_at
+            ? formatDateTime(String(appointment.updated_at))
+            : null,
         });
       }
 

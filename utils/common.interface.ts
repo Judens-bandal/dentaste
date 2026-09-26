@@ -93,6 +93,7 @@ export interface IAppointment {
   balance: number;
   appointment_status: EAppointmentStatus;
   payment_status: EPaymentStatus;
+  updated_at: string | null;
 }
 
 export type IAppointments = IAppointment;
