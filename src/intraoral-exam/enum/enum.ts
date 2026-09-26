@@ -28,6 +28,8 @@ export enum EToothArea {
   LINGUAL = 'lingual',
   OCCLUSAL = 'occlusal',
   INCISAL = 'incisal',
+  PALATAL = 'palatal',
+  LABIAL = 'labial',
 }
 
 export enum EPeriodontalScreening {
