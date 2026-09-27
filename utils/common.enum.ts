@@ -78,6 +78,7 @@ export enum ErrorCode {
   // DTO (400999)
   // ==============================
   DTO_VALIDATION_ERROR = 400999,
+  MISSING_APPOINTMENT_ID = 400155,
 
   // ==============================
   // USER (400000)

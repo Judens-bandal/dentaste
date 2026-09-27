@@ -60,7 +60,7 @@ export class CreateIntraoralExamDto {
   patient_id: string;
 
   @IsUUID()
-  appointment_id: string;
+  appointment_id?: string;
 
   @IsDateString()
   exam_date: string;
