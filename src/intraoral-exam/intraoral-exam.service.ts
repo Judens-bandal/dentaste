@@ -78,15 +78,6 @@ export class IntraoralExamService {
         return;
       }
 
-      if (!dto.appointment_id) {
-        response.data = {
-          code: ErrorCode.MISSING_APPOINTMENT_ID,
-          message: 'Appointment ID is required.',
-        };
-        response.code = HttpStatus.BAD_REQUEST;
-        return;
-      }
-
       const exam = this.intraoralExamRepository.create({
         patient_id: dto.patient_id,
         appointment_id: dto.appointment_id,
