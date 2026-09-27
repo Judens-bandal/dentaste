@@ -56,7 +56,6 @@ export class IntraoralExamService {
       response.data = { code: 0, data: exams };
       response.code = HttpStatus.OK;
     } catch (error) {
-      console.error('Error fetching intraoral exams:', error);
       response.data = { code: ErrorCode.INTERNAL_SERVER_ERROR };
       response.code = HttpStatus.INTERNAL_SERVER_ERROR;
     } finally {
@@ -75,6 +74,15 @@ export class IntraoralExamService {
       const { id } = extractUser(req);
       if (!id) {
         response.data = { code: ErrorCode.MISSING_ID };
+        response.code = HttpStatus.BAD_REQUEST;
+        return;
+      }
+
+      if (!dto.appointment_id) {
+        response.data = {
+          code: ErrorCode.MISSING_APPOINTMENT_ID,
+          message: 'Appointment ID is required.',
+        };
         response.code = HttpStatus.BAD_REQUEST;
         return;
       }
@@ -106,7 +114,6 @@ export class IntraoralExamService {
       response.data = { code: 0, data: exam };
       response.code = HttpStatus.CREATED;
     } catch (error) {
-      console.error('Error creating intraoral exam:', error);
       response.data = { code: ErrorCode.INTERNAL_SERVER_ERROR };
       response.code = HttpStatus.INTERNAL_SERVER_ERROR;
     } finally {
@@ -141,7 +148,6 @@ export class IntraoralExamService {
       response.data = { code: 0 };
       response.code = HttpStatus.OK;
     } catch (error) {
-      console.error('Error deleting intraoral exam:', error);
       response.data = { code: ErrorCode.INTERNAL_SERVER_ERROR };
       response.code = HttpStatus.INTERNAL_SERVER_ERROR;
     } finally {

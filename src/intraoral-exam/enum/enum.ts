@@ -1,4 +1,5 @@
 export enum EToothCondition {
+  TREATED = 'tr',
   PRESENT = 'pres',
   DECAYED = 'dec',
   MISSING_CARIES = 'mc',
