@@ -27,7 +27,7 @@ export class HealthController {
 
   @Get()
   @HealthCheck()
-  //   @Public()
+    @Public()
   check() {
     return this.health.check([
       () =>
