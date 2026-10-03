@@ -20,9 +20,9 @@ export class DatabaseService implements OnApplicationBootstrap {
     // await this.appointmentServiceColumnsMigration();
     // await this.paymentsTable();
     // await this.intraoralExamsTable();
-    // await this.intraoralExamsServicesMigration();
+    await this.intraoralExamsServicesMigration();
     await this.intraoralExamsAppointmentMigration();
-    // await this.createIndexes();
+    await this.createIndexes();
   }
 
   // gen_random_uuid() lives in pgcrypto on Postgres < 14 — it's built into
