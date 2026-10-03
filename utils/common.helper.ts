@@ -382,11 +382,6 @@ export async function assertNoScheduleConflict(
   }
 }
 
-// Throws if the SAME PATIENT already has an appointment within
-// +/- PATIENT_CONFLICT_BUFFER_MINUTES of the requested time, AT ANY BRANCH.
-// This is separate from assertNoScheduleConflict (which only checks
-// per-branch capacity) — a patient can't physically be at two branches
-// at once, regardless of whether each branch individually has room.
 export async function assertNoPatientScheduleConflict(
   appointmentRepository: Repository<Appointment>,
   patientId: string,
@@ -458,11 +453,6 @@ export interface IYearDateRange {
   end_date: string;
 }
 
-/**
- * Resolves a target year (defaulting to the current year if omitted) into
- * a start/end date range, capping endDate at TODAY instead of Dec 31 when
- * the target year is the current one.
- */
 export function getYearDateRange(year?: string): IYearDateRange {
   const now = new Date();
 

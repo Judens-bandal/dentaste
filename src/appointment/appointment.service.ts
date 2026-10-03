@@ -34,11 +34,17 @@ import type {
   ICustomRequest,
 } from '../../utils/common.interface';
 
-import { EAppointmentStatus, isValidServiceType } from './enum/appointment';
+import {
+  EAppointmentStatus,
+  EDentalService,
+  isValidService,
+  isValidServiceType,
+} from './enum/appointment';
 import {
   appointmentKey,
   appointmentsKey,
   patientRecordKey,
+  patientsKey,
 } from '../redis/redis.keys';
 import { Patient } from '../patient/entity/patient';
 import { ILock, RedisLock } from '../redis/redis.lock';
@@ -93,6 +99,7 @@ export class AppointmentService {
           patient_id: true,
           branch: true,
           service: true,
+          service_other: true,
           service_type: true,
           treatment_done: true,
           scheduled_at: true,
@@ -136,6 +143,7 @@ export class AppointmentService {
           },
           branch: appointment.branch,
           service: appointment.service,
+          service_other: appointment.service_other ?? null,
           service_type: appointment.service_type ?? null,
           treatment_done: appointment.treatment_done ?? null,
           scheduled_at: formatDateTime(appointment.scheduled_at),
@@ -212,9 +220,16 @@ export class AppointmentService {
         return;
       }
 
-      // validate service_type belongs to the chosen service's mini-enum
-      // (or is absent for services that don't have one)
-      if (!isValidServiceType(dto.service, dto.service_type)) {
+      const selectedService = dto.service ?? EDentalService.Other;
+      const selectedCustomService = dto.service_other?.trim();
+
+      if (!isValidService(selectedService, selectedCustomService)) {
+        response.data = { code: ErrorCode.INVALID_SERVICE_TYPE };
+        response.code = HttpStatus.BAD_REQUEST;
+        return;
+      }
+
+      if (!isValidServiceType(selectedService, dto.service_type)) {
         response.data = { code: ErrorCode.INVALID_SERVICE_TYPE };
         response.code = HttpStatus.BAD_REQUEST;
         return;
@@ -241,7 +256,8 @@ export class AppointmentService {
         patient_id: dto.patient_id,
         branch: dto.branch,
         scheduled_at: toManilaUTC(dto.scheduled_at),
-        service: dto.service ?? '',
+        service: selectedService,
+        service_other: selectedCustomService ?? null,
         service_type: dto.service_type ?? '',
         treatment_done: dto.treatment_done ?? '',
         amount_charge: dto.amount_charge,
@@ -253,6 +269,7 @@ export class AppointmentService {
 
       await this.redis.del(appointmentsKey());
       await this.redis.del(patientRecordKey(dto.patient_id));
+      await this.redis.del(patientsKey());
 
       const patient = await this.patientRepository.findOne({
         where: { id: saved.patient_id },
@@ -327,11 +344,21 @@ export class AppointmentService {
 
       const newScheduledAt = dto.scheduled_at ?? existing.scheduled_at;
       const newBranch = dto.branch ?? existing.branch;
-      const newService = dto.service ?? existing.service;
+      const newService = dto.service ?? (existing.service as EDentalService);
       const newServiceType =
         dto.service_type !== undefined
           ? dto.service_type
           : existing.service_type;
+      const newServiceOther =
+        dto.service_other !== undefined
+          ? dto.service_other.trim()
+          : (existing.service_other?.trim() ?? undefined);
+
+      if (!isValidService(newService, newServiceOther)) {
+        response.data = { code: ErrorCode.INVALID_SERVICE_TYPE };
+        response.code = HttpStatus.BAD_REQUEST;
+        return;
+      }
 
       // validate service_type belongs to the chosen service's mini-enum
       if (
@@ -405,6 +432,7 @@ export class AppointmentService {
           branch: newBranch,
           scheduled_at: newScheduledAt, // raw value — not formatted
           service: newService ?? '',
+          service_other: newServiceOther ?? null,
           service_type: newServiceType ?? '',
           treatment_done:
             dto.treatment_done !== undefined
@@ -418,6 +446,7 @@ export class AppointmentService {
         await this.appointmentRepository.update({ id: dto.id }, appointment);
         await this.redis.del(appointmentKey(dto.id));
         await this.redis.del(appointmentsKey());
+        await this.redis.del(patientsKey());
 
         const patient = await this.patientRepository.findOne({
           where: { id: existing.patient_id },
@@ -506,6 +535,7 @@ export class AppointmentService {
       await this.appointmentRepository.delete({ id: dto.id });
       await this.redis.del(appointmentKey(dto.id));
       await this.redis.del(appointmentsKey());
+      await this.redis.del(patientsKey());
 
       void this.notificationHelper.notifyDoctors(
         EDoctorAppointmentNotification.APPOINTMENT_DELETED,

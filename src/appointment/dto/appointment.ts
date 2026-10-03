@@ -8,8 +8,13 @@ import {
   Min,
   IsBoolean,
   IsOptional,
+  ValidateIf,
+  MaxLength,
+  IsArray,
+  ArrayMinSize,
+  ValidateNested,
 } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { Optional } from '@nestjs/common';
 import { IsCustomDate, IsFutureDate } from '../../../utils/common.helper';
 import {
@@ -17,6 +22,20 @@ import {
   EBranch,
   EDentalService,
 } from '../enum/appointment';
+
+export class AppointmentServiceEntryDto {
+  @IsEnum(EDentalService)
+  service: EDentalService;
+
+  @IsOptional()
+  @IsString()
+  service_type?: string;
+
+  @ValidateIf((e) => String(e.service) === String(EDentalService.Other))
+  @IsString()
+  @MaxLength(255)
+  service_other?: string;
+}
 
 export class CreateAppointmentDto {
   @IsUUID()
@@ -31,12 +50,23 @@ export class CreateAppointmentDto {
   scheduled_at: string;
 
   @IsOptional()
-  @Transform(({ value }: { value: unknown }) =>
-    value === '' ? undefined : value,
-  )
   @IsEnum(EDentalService)
   service?: EDentalService;
 
+  @ValidateIf((e) => String(e.service) === String(EDentalService.Other))
+  @IsString()
+  @MaxLength(255)
+  service_other?: string;
+
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    value === '' ? undefined : value,
+  )
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => AppointmentServiceEntryDto)
+  services: AppointmentServiceEntryDto[];
   // validated against SERVICE_TYPE_MAP in the service layer (depends on `service`)
   @IsOptional()
   service_type?: string;
@@ -48,10 +78,6 @@ export class CreateAppointmentDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   amount_charge: number;
-
-  // balance is NOT accepted from the client at all — it's always
-  // trg_appointments_recalc_balance computing it from debitAmount on INSERT.
-  // (removed entirely, rather than kept optional, so it can never be set)
 
   @IsOptional()
   @IsEnum(EAppointmentStatus)
@@ -76,6 +102,12 @@ export class UpdateAppointmentDto {
   )
   @IsEnum(EDentalService)
   service?: EDentalService;
+
+  @ValidateIf((e) => String(e.service) === String(EDentalService.Other))
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  service_other?: string;
 
   @IsOptional()
   @IsString()

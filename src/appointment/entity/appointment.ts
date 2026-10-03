@@ -41,7 +41,15 @@ export class Appointment {
   scheduled_at: string;
 
   @Column({ type: 'varchar', length: 30, nullable: true })
-  service: EDentalService | '' | null;
+  service: string | null;
+
+  @Column({
+    name: 'service_other',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
+  service_other: string | null;
 
   // holds the mini-enum value (EBraceType | EDentureType | EOdontectomyType |
   // EToothExtractionType | EVeneerType) for services that have sub-choices
