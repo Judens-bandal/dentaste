@@ -22,6 +22,20 @@ export enum EDentalService {
   ToothExtraction = 'tooth_extraction',
   ToothRestoration = 'tooth_restoration',
   Veneers = 'veneers',
+  Other = 'other',
+}
+export function isValidService(
+  service: EDentalService | string,
+  serviceOther?: string,
+): boolean {
+  if (String(service) === EDentalService.Other) return !!serviceOther?.trim();
+  return !serviceOther; // other services shouldn't carry free text
+}
+export interface TAppointmentServiceEntry {
+  service: EDentalService;
+  service_type?: string; // only when SERVICE_TYPE_MAP has this service
+  service_other?: string; // only when service === Other
+  tooth_numbers?: number[]; // optional, if you want to tie a service to specific teeth
 }
 
 export enum EBraceType {
@@ -65,25 +79,27 @@ export const SERVICE_TYPE_MAP: Partial<
 };
 
 export function isValidServiceType(
-  service?: EDentalService,
+  service?: EDentalService | string,
   serviceType?: string,
 ): boolean {
   if (!service) return !serviceType;
-  const allowed = SERVICE_TYPE_MAP[service];
+  if (String(service) === EDentalService.Other) return !serviceType;
+
+  const allowed = SERVICE_TYPE_MAP[String(service) as EDentalService];
   if (!allowed) return !serviceType; // services without sub-choices must not receive one
   if (!serviceType) return false; // services with sub-choices require one
   return Object.values(allowed).includes(serviceType);
 }
 
-export function getTreatmentLabel(
-  service: EDentalService,
-  serviceType?: string,
-): string {
-  const serviceLabel = service.replace(/_/g, ' ');
-  return serviceType
-    ? `${serviceType.replace(/_/g, ' ')} ${serviceLabel}`
-    : serviceLabel;
-}
+// export function getTreatmentLabel(
+//   service: EDentalService,
+//   serviceType?: string,
+// ): string {
+//   const serviceLabel = service.replace(/_/g, ' ');
+//   return serviceType
+//     ? `${serviceType.replace(/_/g, ' ')} ${serviceLabel}`
+//     : serviceLabel;
+// }
 
 // common/enums.ts
 export enum EAppointmentStatus {
@@ -97,4 +113,27 @@ export enum EPaymentStatus {
   PAID = 'PAID',
   PARTIAL = 'PARTIAL',
   UNPAID = 'UNPAID',
+}
+
+export function isValidServiceEntry(entry: TAppointmentServiceEntry): boolean {
+  if (!isValidService(entry.service, entry.service_other)) return false;
+  return isValidServiceType(entry.service, entry.service_type);
+}
+
+export function isValidServices(entries: TAppointmentServiceEntry[]): boolean {
+  return entries.length > 0 && entries.every(isValidServiceEntry);
+}
+
+export function getTreatmentLabel(
+  service: EDentalService | string,
+  serviceType?: string,
+  serviceOther?: string,
+): string {
+  if (String(service) === EDentalService.Other) {
+    return serviceOther?.trim() || 'Other';
+  }
+  const serviceLabel = String(service).replace(/_/g, ' ');
+  return serviceType
+    ? `${serviceType.replace(/_/g, ' ')} ${serviceLabel}`
+    : serviceLabel;
 }

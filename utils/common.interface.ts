@@ -12,6 +12,7 @@ import {
   EBranch,
   EDentalService,
   EPaymentStatus,
+  TAppointmentServiceEntry,
 } from '../src/appointment/enum/appointment';
 
 export interface IClaims {
@@ -50,27 +51,6 @@ export interface IResponse {
   data: Record<any, any> | null;
 }
 
-// export interface INotification {
-//   notification_type: ENotificationType;
-//   internal_data: string;
-//   created_at: string;
-//   created_by: number | string;
-//   creator_role: EAppRole;
-// }
-
-// export interface IAppointments {
-//   id: string;
-//   patient: {
-//     name: string;
-//     cellphoneNumber: string;
-//     address: string;
-//   };
-//   branch: string;
-//   treatmentDone: string;
-//   noShow: number;
-//   scheduledAt: string;
-// }
-
 export interface IAppointment {
   id: string;
   patient_id: string;
@@ -85,7 +65,8 @@ export interface IAppointment {
     status: EPatientStatus;
   };
   branch: EBranch;
-  service: EDentalService | '' | null;
+  service: string | null;
+  service_other: string | null;
   service_type: string | null;
   treatment_done: string | null;
   scheduled_at: string;
@@ -151,6 +132,13 @@ export interface IPatient {
   med_conds?: EMedicalCondition[] | null;
   med_conds_other?: string | null;
   status?: EPatientStatus;
+  service?: string[] | null;
+  service_type?: string[] | null;
+  services?: Array<{
+    service: string;
+    service_type?: string | null;
+    service_other?: string | null;
+  }>;
 }
 
 export interface IPatientRecord {
@@ -162,6 +150,11 @@ export interface IPatientRecord {
   tooth_records: string;
   service: string;
   service_type: string;
+  services?: Array<{
+    service: string;
+    service_type?: string | null;
+    service_other?: string | null;
+  }>;
   branch: string;
   amount_charge: number;
   amount_paid: number;
@@ -175,7 +168,8 @@ export interface IPatientRecord {
 export interface IPayment {
   id: string;
   appointment: {
-    service: EDentalService | '' | null;
+    service: string | null;
+    service_other: string | null;
     service_type: string | null;
     treatment_done: string | null;
     branch: string | null;

@@ -11,7 +11,11 @@ import {
   CreateIntraoralExamDto,
   GetIntraoralExamDto,
 } from './dto/intraoral-exam';
-import { intraoralExamsKey, patientRecordKey } from '../redis/redis.keys';
+import {
+  intraoralExamsKey,
+  patientRecordKey,
+  patientsKey,
+} from '../redis/redis.keys';
 import { RedisCacheService } from '../redis/redis-cach.service';
 import {
   EDoctorNotification,
@@ -91,10 +95,12 @@ export class IntraoralExamService {
         xray_periapical_teeth: dto.xray_periapical_teeth ?? null,
         xray_others: dto.xray_others ?? null,
         tooth_records: dto.tooth_records ?? null,
+        services: dto.services ?? null,
       });
       await this.intraoralExamRepository.save(exam);
       await this.redis.del(intraoralExamsKey(dto.patient_id));
       await this.redis.del(patientRecordKey(dto.patient_id));
+      await this.redis.del(patientsKey());
 
       void this.notificationHelper.notifyDoctor(
         id,

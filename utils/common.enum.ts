@@ -11,24 +11,6 @@ export enum ERole {
   ADMIN = 'admin',
 }
 
-// export enum EPermissions {
-//   VIEW_PATIENTS = 'VPT',
-//   MANAGE_PATIENTS = 'MPT',
-//   VIEW_APPOINTMENTS = 'VAP',
-//   MANAGE_APPOINTMENTS = 'MA',
-//   VIEW_PAYMENTS = 'VPY',
-//   MANAGE_PAYMENTS = 'MPY',
-//   VIEW_REPORTS = 'VR',
-//   VIEW_NOTIFICATIONS = 'VN',
-//   MANAGE_NOTIFICATIONS = 'MN',
-//   MANAGE_AI_SETTINGS = 'MAI',
-//   MANAGE_USERS = 'MU',
-//   MANAGE_USERS_ADMIN_NOTIF = 'MUAN',
-//   MANAGE_PERMISSIONS = 'MP',
-//   MANAGE_ASSISTANT_PERMISSIONS = 'MAP',
-// }
-
-// src/common/enums/permissions.enum.ts
 export enum EPermissions {
   MAINTENANCE_SETTINGS = 'SM',
   VIEW_PATIENTS = 'VPT',

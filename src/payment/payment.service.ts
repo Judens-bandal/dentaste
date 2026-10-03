@@ -314,6 +314,7 @@ export class PaymentService {
           created_at: true,
           appointment: {
             service: true,
+            service_other: true,
             service_type: true,
             treatment_done: true,
             branch: true,
@@ -336,6 +337,7 @@ export class PaymentService {
           id: payment.id,
           appointment: {
             service: payment.appointment?.service ?? null,
+            service_other: payment.appointment?.service_other ?? null,
             service_type: payment.appointment?.service_type ?? null,
             treatment_done: payment.appointment?.treatment_done ?? null,
             branch: payment.appointment?.branch ?? null,

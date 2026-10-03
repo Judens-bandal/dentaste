@@ -19,9 +19,10 @@ export class DatabaseService implements OnApplicationBootstrap {
     // await this.appointmentsTable();
     // await this.appointmentServiceColumnsMigration();
     // await this.paymentsTable();
-    await this.intraoralExamsTable();
+    // await this.intraoralExamsTable();
+    // await this.intraoralExamsServicesMigration();
     await this.intraoralExamsAppointmentMigration();
-    await this.createIndexes();
+    // await this.createIndexes();
   }
 
   // gen_random_uuid() lives in pgcrypto on Postgres < 14 — it's built into
@@ -93,6 +94,7 @@ export class DatabaseService implements OnApplicationBootstrap {
         xray_periapical_teeth   VARCHAR(100)  NULL,
         xray_others             VARCHAR(255)  NULL,
         tooth_records           JSONB         NULL,
+        services                JSONB         NULL,
         appointment_id          CHAR(36)      NULL,
         created_at              TIMESTAMP     NOT NULL DEFAULT NOW(),
         PRIMARY KEY (id),
@@ -106,6 +108,35 @@ export class DatabaseService implements OnApplicationBootstrap {
       this.logger.log('intraoral_exams table created successfully');
     } catch (error) {
       this.logger.error('Error creating intraoral_exams table', error);
+    }
+  }
+
+  async intraoralExamsServicesMigration() {
+    try {
+      const servicesCheck = await this.dataSource.query(`
+      SELECT COUNT(*) as count
+      FROM information_schema.columns
+      WHERE table_schema = current_schema()
+      AND table_name = 'intraoral_exams'
+      AND column_name = 'services'
+    `);
+
+      if (Number(servicesCheck[0].count) === 0) {
+        await this.dataSource.query(`
+        ALTER TABLE intraoral_exams
+        ADD COLUMN services JSONB NULL;
+      `);
+        this.logger.log('intraoral_exams.services column added');
+      }
+
+      this.logger.log(
+        'IntraoralExams services migration completed successfully',
+      );
+    } catch (error) {
+      this.logger.error(
+        'Error running intraoral exams services migration',
+        error,
+      );
     }
   }
 

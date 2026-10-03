@@ -110,16 +110,102 @@ export class PatientService {
           created_at: true,
           // updated_at: true,
         },
+        order: { last_name: 'ASC', first_name: 'ASC' },
       });
-      await this.redis.set(cachekey, patient, PATIENT_TTL);
 
-      // void this.notificationHelper.notifyDoctors(
-      //   id,
-      //   EDoctorNotification.PATIENT_CREATED,
-      //   'All patients have been fetched.',
-      // );
+      const patientIds = patient
+        .map((entry) => entry.id)
+        .filter((id): id is string => !!id);
 
-      response.data = { code: 0, data: patient };
+      const serviceMap = new Map<
+        string,
+        {
+          service: string[] | null;
+          service_type: string[] | null;
+          services: Array<{
+            service: string;
+            service_type?: string | null;
+            service_other?: string | null;
+          }>;
+        }
+      >();
+
+      if (patientIds.length > 0) {
+        const result = await this.patientRepository.query(
+          `
+            SELECT
+              patient_id,
+              COALESCE(
+                ARRAY_AGG(DISTINCT service_entry->>'service')
+                  FILTER (WHERE NULLIF(service_entry->>'service', '') IS NOT NULL),
+                ARRAY[]::text[]
+              ) AS service,
+              COALESCE(
+                ARRAY_AGG(DISTINCT service_entry->>'service_type')
+                  FILTER (WHERE NULLIF(service_entry->>'service_type', '') IS NOT NULL),
+                ARRAY[]::text[]
+              ) AS service_type,
+              COALESCE(JSONB_AGG(DISTINCT service_entry), '[]'::jsonb) AS services
+            FROM (
+              SELECT a.patient_id, entry AS service_entry
+              FROM appointments a
+              INNER JOIN intraoral_exams ie ON ie.appointment_id = a.id
+              CROSS JOIN LATERAL jsonb_array_elements(
+                CASE
+                  WHEN jsonb_typeof(ie.services) = 'array' THEN ie.services
+                  ELSE '[]'::jsonb
+                END
+              ) AS entry
+              WHERE a.patient_id = ANY($1)
+
+              UNION ALL
+
+              SELECT
+                a.patient_id,
+                jsonb_build_object(
+                  'service', a.service,
+                  'service_type', NULLIF(a.service_type, ''),
+                  'service_other', a.service_other
+                ) AS service_entry
+              FROM appointments a
+              WHERE a.patient_id = ANY($1)
+                AND a.service IS NOT NULL
+                AND NOT EXISTS (
+                  SELECT 1
+                  FROM intraoral_exams ie
+                  WHERE ie.appointment_id = a.id
+                    AND jsonb_typeof(ie.services) = 'array'
+                    AND jsonb_array_length(ie.services) > 0
+                )
+            ) AS patient_service_entries
+            GROUP BY patient_id
+          `,
+          [patientIds],
+        );
+
+        for (const row of result) {
+          serviceMap.set(row.patient_id, {
+            service: row.service ?? null,
+            service_type: row.service_type ?? null,
+            services: row.services ?? [],
+          });
+        }
+      }
+
+      const patientsWithServices = patient.map((entry) => ({
+        ...entry,
+        ...(entry.id
+          ? (serviceMap.get(entry.id) ?? {
+              service: null,
+              service_type: null,
+              services: [],
+            })
+          : { service: null, service_type: null, services: [] }),
+      }));
+
+      await this.redis.set(cachekey, patientsWithServices, PATIENT_TTL);
+
+      response.data = { code: 0, data: patientsWithServices };
       response.code = HttpStatus.OK;
     } catch (error) {
       response.data = { code: ErrorCode.INTERNAL_SERVER_ERROR };
@@ -171,6 +257,29 @@ export class PatientService {
           ) AS tooth_records,
           a.service,
           a.service_type,
+          COALESCE(
+            (
+              SELECT JSONB_AGG(DISTINCT service_entry)
+              FROM intraoral_exams ie
+              CROSS JOIN LATERAL jsonb_array_elements(
+                CASE
+                  WHEN jsonb_typeof(ie.services) = 'array' THEN ie.services
+                  ELSE '[]'::jsonb
+                END
+              ) AS service_entry
+              WHERE ie.appointment_id = a.id
+            ),
+            CASE
+              WHEN a.service IS NOT NULL THEN jsonb_build_array(
+                jsonb_build_object(
+                  'service', a.service,
+                  'service_type', NULLIF(a.service_type, ''),
+                  'service_other', a.service_other
+                )
+              )
+              ELSE '[]'::jsonb
+            END
+          ) AS services,
           a.branch,
           a.amount_charge,
           COALESCE(py.amount_paid, 0) AS amount_paid,

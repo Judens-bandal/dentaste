@@ -23,6 +23,7 @@ import {
   ETmd,
   EXrayType,
 } from '../enum/enum';
+import { EDentalService } from '../../appointment/enum/appointment';
 
 export class ToothAreaSnapshotDto {
   @IsEnum(EToothArea)
@@ -55,6 +56,21 @@ export class ToothRecordSnapshotDto {
   remarks?: string;
 }
 
+export class IntraoralExamServiceEntryDto {
+  @IsEnum(EDentalService)
+  service: EDentalService;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  service_type?: string;
+
+  @ValidateIf((entry) => String(entry.service) === String(EDentalService.Other))
+  @IsString()
+  @MaxLength(255)
+  service_other?: string;
+}
+
 export class CreateIntraoralExamDto {
   @IsString()
   patient_id: string;
@@ -64,6 +80,12 @@ export class CreateIntraoralExamDto {
 
   @IsDateString()
   exam_date: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => IntraoralExamServiceEntryDto)
+  services?: IntraoralExamServiceEntryDto[];
 
   @IsOptional()
   @IsArray()
