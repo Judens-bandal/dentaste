@@ -24,7 +24,7 @@ export class IntraoralExam {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'patient_id', type: 'uuid' })
+  @Column({ name: 'patient_id', type: 'uuid', nullable: false })
   patient_id: string;
 
   @ManyToOne(() => Patient, { onDelete: 'CASCADE' })
