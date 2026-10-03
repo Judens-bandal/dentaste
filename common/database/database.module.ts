@@ -30,7 +30,7 @@ import { IntraoralExam } from 'src/intraoral-exam/entity/intraoral-exam';
       useFactory: (configService: ConfigService) => ({
         type: 'postgres',
         autoLoadEntities: true,
-        synchronize: true, // Set to false in production for safety
+        synchronize: false, // Set to false in production for safety
         // logging: configService.get<string>('NODE_ENV') === 'development',
 
         host: configService.get<string>('DB_HOST'),
