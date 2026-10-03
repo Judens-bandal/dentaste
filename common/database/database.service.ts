@@ -19,7 +19,7 @@ export class DatabaseService implements OnApplicationBootstrap {
     // await this.appointmentsTable();
     // await this.appointmentServiceColumnsMigration();
     // await this.paymentsTable();
-    // await this.intraoralExamsTable();
+    await this.intraoralExamsTable();
     await this.intraoralExamsServicesMigration();
     await this.intraoralExamsAppointmentMigration();
     await this.createIndexes();
