@@ -12,18 +12,13 @@ export class DatabaseService implements OnApplicationBootstrap {
   ) {}
 
   async onApplicationBootstrap() {
-    // await this.enableExtensions();
-    // await this.usersTable();
-    // await this.patientsTable();
-    // await this.patientHealthQuestionsMigration();
-    // await this.appointmentsTable();
-    // await this.appointmentServiceColumnsMigration();
-    // await this.paymentsTable();
     await this.intraoralExamsTable();
     await this.intraoralExamsServicesMigration();
     await this.intraoralExamsAppointmentMigration();
+    await this.intraoralExamsFkMigration();
     await this.appointmentAmountPaidMigration();
     await this.appointmentBaseChargeMigration();
+    await this.appointmentServiceOtherMigration();
     await this.createIndexes();
   }
 
@@ -134,31 +129,27 @@ export class DatabaseService implements OnApplicationBootstrap {
 
   async intraoralExamsTable() {
     try {
-      const query = `
-      CREATE TABLE IF NOT EXISTS intraoral_exams (
-        id                      CHAR(36)      NOT NULL DEFAULT gen_random_uuid(),
-        patient_id              CHAR(36)      NOT NULL,
-        exam_date               DATE          NOT NULL,
-        periodontal             TEXT          NULL,
-        occlusion               TEXT          NULL,
-        appliances              TEXT          NULL,
-        appliances_other        VARCHAR(255)  NULL,
-        tmd                     TEXT          NULL,
-        xray_taken              TEXT          NULL,
-        xray_periapical_teeth   VARCHAR(100)  NULL,
-        xray_others             VARCHAR(255)  NULL,
-        tooth_records           JSONB         NULL,
-        services                JSONB         NULL,
-        appointment_id          CHAR(36)      NULL,
-        created_at              TIMESTAMP     NOT NULL DEFAULT NOW(),
-        PRIMARY KEY (id),
-        CONSTRAINT fk_intraoral_exam_patient
-          FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
-        CONSTRAINT fk_intraoral_exams_appointment
-          FOREIGN KEY (appointment_id) REFERENCES appointments(id) ON DELETE SET NULL
-      );
-    `;
-      await this.dataSource.query(query);
+      // Create table only if it doesn't exist at all
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS intraoral_exams (
+          id                      CHAR(36)      NOT NULL DEFAULT gen_random_uuid(),
+          patient_id              CHAR(36)      NULL,
+          exam_date               DATE          NOT NULL,
+          periodontal             TEXT          NULL,
+          occlusion               TEXT          NULL,
+          appliances              TEXT          NULL,
+          appliances_other        VARCHAR(255)  NULL,
+          tmd                     TEXT          NULL,
+          xray_taken              TEXT          NULL,
+          xray_periapical_teeth   VARCHAR(100)  NULL,
+          xray_others             VARCHAR(255)  NULL,
+          tooth_records           JSONB         NULL,
+          services                JSONB         NULL,
+          appointment_id          CHAR(36)      NULL,
+          created_at              TIMESTAMP     NOT NULL DEFAULT NOW(),
+          PRIMARY KEY (id)
+        );
+      `);
       this.logger.log('intraoral_exams table created successfully');
     } catch (error) {
       this.logger.error('Error creating intraoral_exams table', error);
@@ -562,7 +553,70 @@ export class DatabaseService implements OnApplicationBootstrap {
   // fresh-create schema) since existing rows have no service data to
   // backfill — enforce presence at the DTO/service-layer level instead.
   // Safe to re-run — each column check runs independently.
-  async appointmentServiceColumnsMigration() {
+  async intraoralExamsFkMigration() {
+    try {
+      const patientFk = await this.dataSource.query(`
+        SELECT COUNT(*) as count FROM information_schema.table_constraints
+        WHERE table_schema = current_schema()
+        AND table_name = 'intraoral_exams'
+        AND constraint_name = 'fk_intraoral_exam_patient'
+      `);
+      if (Number(patientFk[0].count) === 0) {
+        // Only add FK if no nulls exist in patient_id
+        const nullCount = await this.dataSource.query(
+          `SELECT COUNT(*) as count FROM intraoral_exams WHERE patient_id IS NULL`
+        );
+        if (Number(nullCount[0].count) === 0) {
+          await this.dataSource.query(`
+            ALTER TABLE intraoral_exams
+            ADD CONSTRAINT fk_intraoral_exam_patient
+            FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE;
+          `);
+          this.logger.log('intraoral_exams patient FK added');
+        }
+      }
+
+      const apptFk = await this.dataSource.query(`
+        SELECT COUNT(*) as count FROM information_schema.table_constraints
+        WHERE table_schema = current_schema()
+        AND table_name = 'intraoral_exams'
+        AND constraint_name = 'fk_intraoral_exams_appointment'
+      `);
+      if (Number(apptFk[0].count) === 0) {
+        await this.dataSource.query(`
+          ALTER TABLE intraoral_exams
+          ADD CONSTRAINT fk_intraoral_exams_appointment
+          FOREIGN KEY (appointment_id) REFERENCES appointments(id) ON DELETE SET NULL;
+        `);
+        this.logger.log('intraoral_exams appointment FK added');
+      }
+      this.logger.log('intraoral_exams FK migration completed');
+    } catch (error) {
+      this.logger.error('Error running intraoral_exams FK migration', error);
+    }
+  }
+
+  async appointmentServiceOtherMigration() {
+    try {
+      const check = await this.dataSource.query(`
+        SELECT COUNT(*) as count
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+        AND table_name = 'appointments'
+        AND column_name = 'service_other'
+      `);
+      if (Number(check[0].count) === 0) {
+        await this.dataSource.query(`
+          ALTER TABLE appointments ADD COLUMN service_other VARCHAR(255) NULL;
+        `);
+        this.logger.log('appointments.service_other column added');
+      }
+      this.logger.log('appointments.service_other migration completed');
+    } catch (error) {
+      this.logger.error('Error running appointments.service_other migration', error);
+    }
+  }
+
     try {
       const serviceColumnCheck = await this.dataSource.query(`
         SELECT COUNT(*) as count
