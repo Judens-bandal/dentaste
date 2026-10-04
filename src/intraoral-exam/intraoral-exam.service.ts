@@ -156,8 +156,10 @@ export class IntraoralExamService {
       }
 
       await this.intraoralExamRepository.delete({ id });
-      await this.redis.del(intraoralExamsKey(exam.patient_id));
-      await this.redis.del(patientRecordKey(exam.patient_id));
+      if (exam.patient_id) {
+        await this.redis.del(intraoralExamsKey(exam.patient_id));
+        await this.redis.del(patientRecordKey(exam.patient_id));
+      }
 
       if (exam.appointment_id) {
         await this.recalcAppointmentCharge(exam.appointment_id);
