@@ -53,17 +53,17 @@ export interface IResponse {
 
 export interface IAppointment {
   id: string;
-  patient_id: string;
+  patient_id: string | null;
   patient: {
-    last_name: string;
-    first_name: string;
+    last_name: string | null;
+    first_name: string | null;
     middle_name?: string | null;
     cellphone_number: string | null;
     address: string | null;
     occupation: string | null;
     age: number | null;
-    status: EPatientStatus;
-  };
+    status: EPatientStatus | null;
+  } | null;
   branch: EBranch;
   service: string | null;
   service_other: string | null;

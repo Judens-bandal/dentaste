@@ -23,14 +23,15 @@ export class Appointment {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'patient_id', type: 'uuid' })
-  patient_id: string;
+  @Column({ name: 'patient_id', type: 'uuid', nullable: true })
+  patient_id: string | null;
 
   @ManyToOne(() => Patient, (patient) => patient.appointments, {
     onDelete: 'CASCADE',
+    nullable: true,
   })
   @JoinColumn({ name: 'patient_id' })
-  patient: Patient;
+  patient: Patient | null;
 
   // Renamed from branch_id — it's a fixed enum value, not a foreign key.
   @Column({ type: 'varchar', length: 20 })
