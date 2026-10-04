@@ -19,7 +19,8 @@ export class DatabaseService implements OnApplicationBootstrap {
     await this.appointmentAmountPaidMigration();
     await this.appointmentBaseChargeMigration();
     await this.appointmentServiceOtherMigration();
-    await this.createIndexes();
+    await this.appointmentServicesMigration();
+    // await this.createIndexes();
   }
 
   // gen_random_uuid() lives in pgcrypto on Postgres < 14 — it's built into
@@ -99,7 +100,10 @@ export class DatabaseService implements OnApplicationBootstrap {
 
       this.logger.log('appointments.base_charge migration completed');
     } catch (error) {
-      this.logger.error('Error running appointments.base_charge migration', error);
+      this.logger.error(
+        'Error running appointments.base_charge migration',
+        error,
+      );
     }
   }
 
@@ -123,7 +127,10 @@ export class DatabaseService implements OnApplicationBootstrap {
 
       this.logger.log('appointments.amount_paid migration completed');
     } catch (error) {
-      this.logger.error('Error running appointments.amount_paid migration', error);
+      this.logger.error(
+        'Error running appointments.amount_paid migration',
+        error,
+      );
     }
   }
 
@@ -564,7 +571,7 @@ export class DatabaseService implements OnApplicationBootstrap {
       if (Number(patientFk[0].count) === 0) {
         // Only add FK if no nulls exist in patient_id
         const nullCount = await this.dataSource.query(
-          `SELECT COUNT(*) as count FROM intraoral_exams WHERE patient_id IS NULL`
+          `SELECT COUNT(*) as count FROM intraoral_exams WHERE patient_id IS NULL`,
         );
         if (Number(nullCount[0].count) === 0) {
           await this.dataSource.query(`
@@ -613,10 +620,14 @@ export class DatabaseService implements OnApplicationBootstrap {
       }
       this.logger.log('appointments.service_other migration completed');
     } catch (error) {
-      this.logger.error('Error running appointments.service_other migration', error);
+      this.logger.error(
+        'Error running appointments.service_other migration',
+        error,
+      );
     }
   }
 
+  async appointmentServicesMigration() {
     try {
       const serviceColumnCheck = await this.dataSource.query(`
         SELECT COUNT(*) as count
@@ -781,8 +792,8 @@ export class DatabaseService implements OnApplicationBootstrap {
         AND column_name = 'branch'
       `);
       if (
-        Number(branchIdCheck[0].count) > 0 &&
-        Number(branchCheck[0].count) === 0
+        Number(branchIdCheck[0]?.count ?? 0) > 0 &&
+        Number(branchCheck[0]?.count ?? 0) === 0
       ) {
         await this.dataSource.query(`
           ALTER TABLE appointments RENAME COLUMN branch_id TO branch;
@@ -1107,7 +1118,9 @@ export class DatabaseService implements OnApplicationBootstrap {
             [tableMatch[1]],
           );
           if (Number(tableExists[0].count) === 0) {
-            this.logger.log(`Table ${tableMatch[1]} does not exist, skipping index ${index.name}`);
+            this.logger.log(
+              `Table ${tableMatch[1]} does not exist, skipping index ${index.name}`,
+            );
             continue;
           }
         }
