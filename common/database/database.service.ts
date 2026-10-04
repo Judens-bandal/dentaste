@@ -22,6 +22,8 @@ export class DatabaseService implements OnApplicationBootstrap {
     await this.intraoralExamsTable();
     await this.intraoralExamsServicesMigration();
     await this.intraoralExamsAppointmentMigration();
+    await this.appointmentAmountPaidMigration();
+    await this.appointmentBaseChargeMigration();
     await this.createIndexes();
   }
 
@@ -77,6 +79,58 @@ export class DatabaseService implements OnApplicationBootstrap {
   //     this.logger.error('Error creating intraoral_exams table', error);
   //   }
   // }
+
+  async appointmentBaseChargeMigration() {
+    try {
+      const check = await this.dataSource.query(`
+        SELECT COUNT(*) as count
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+        AND table_name = 'appointments'
+        AND column_name = 'base_charge'
+      `);
+
+      if (Number(check[0].count) === 0) {
+        await this.dataSource.query(`
+          ALTER TABLE appointments
+          ADD COLUMN base_charge NUMERIC(10,2) NOT NULL DEFAULT 0;
+        `);
+        // backfill: for existing rows, base_charge = amount_charge (no exams yet)
+        await this.dataSource.query(`
+          UPDATE appointments SET base_charge = amount_charge WHERE base_charge = 0;
+        `);
+        this.logger.log('appointments.base_charge column added and backfilled');
+      }
+
+      this.logger.log('appointments.base_charge migration completed');
+    } catch (error) {
+      this.logger.error('Error running appointments.base_charge migration', error);
+    }
+  }
+
+  async appointmentAmountPaidMigration() {
+    try {
+      const check = await this.dataSource.query(`
+        SELECT COUNT(*) as count
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+        AND table_name = 'appointments'
+        AND column_name = 'amount_paid'
+      `);
+
+      if (Number(check[0].count) === 0) {
+        await this.dataSource.query(`
+          ALTER TABLE appointments
+          ADD COLUMN amount_paid NUMERIC(10,2) NOT NULL DEFAULT 0;
+        `);
+        this.logger.log('appointments.amount_paid column added');
+      }
+
+      this.logger.log('appointments.amount_paid migration completed');
+    } catch (error) {
+      this.logger.error('Error running appointments.amount_paid migration', error);
+    }
+  }
 
   async intraoralExamsTable() {
     try {
@@ -980,24 +1034,32 @@ export class DatabaseService implements OnApplicationBootstrap {
 
     for (const index of indexes) {
       try {
-        const result = await this.dataSource.query(
-          `
-          SELECT COUNT(*) as count
-          FROM pg_indexes
-          WHERE schemaname = 'public'
-          AND indexname = $1
-        `,
+        const indexExists = await this.dataSource.query(
+          `SELECT COUNT(*) as count FROM pg_indexes
+           WHERE schemaname = 'public' AND indexname = $1`,
           [index.name],
         );
-
-        const exists = Number(result[0].count) > 0;
-
-        if (!exists) {
-          await this.dataSource.query(index.sql);
-          this.logger.log(`Index ${index.name} created successfully`);
-        } else {
+        if (Number(indexExists[0].count) > 0) {
           this.logger.log(`Index ${index.name} already exists, skipping`);
+          continue;
         }
+
+        // extract table name from the SQL to check it exists first
+        const tableMatch = index.sql.match(/ON (\w+)\s*\(/i);
+        if (tableMatch) {
+          const tableExists = await this.dataSource.query(
+            `SELECT COUNT(*) as count FROM information_schema.tables
+             WHERE table_schema = current_schema() AND table_name = $1`,
+            [tableMatch[1]],
+          );
+          if (Number(tableExists[0].count) === 0) {
+            this.logger.log(`Table ${tableMatch[1]} does not exist, skipping index ${index.name}`);
+            continue;
+          }
+        }
+
+        await this.dataSource.query(index.sql);
+        this.logger.log(`Index ${index.name} created successfully`);
       } catch (error) {
         this.logger.error(`Error creating index ${index.name}`, error);
       }

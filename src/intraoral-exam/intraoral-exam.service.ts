@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Response } from 'express';
 
 import { IntraoralExam } from './entity/intraoral-exam';
+import { Appointment } from '../appointment/entity/appointment';
 import { ICustomRequest, IResponse } from '../../utils/common.interface';
 import { ErrorCode } from '../../utils/common.enum';
 import { expressResponse, extractUser } from '../../utils/common.helper';
@@ -12,6 +13,8 @@ import {
   GetIntraoralExamDto,
 } from './dto/intraoral-exam';
 import {
+  appointmentKey,
+  appointmentsKey,
   intraoralExamsKey,
   patientRecordKey,
   patientsKey,
@@ -28,6 +31,8 @@ export class IntraoralExamService {
   constructor(
     @InjectRepository(IntraoralExam, 'main_repo')
     private readonly intraoralExamRepository: Repository<IntraoralExam>,
+    @InjectRepository(Appointment, 'main_repo')
+    private readonly appointmentRepository: Repository<Appointment>,
     private readonly redis: RedisCacheService,
     private readonly notificationHelper: NotificationHelper,
   ) {}
@@ -96,11 +101,22 @@ export class IntraoralExamService {
         xray_others: dto.xray_others ?? null,
         tooth_records: dto.tooth_records ?? null,
         services: dto.services ?? null,
+        additional_service: dto.additional_service ?? null,
+        additional_charge: dto.additional_charge ?? null,
       });
       await this.intraoralExamRepository.save(exam);
+
+      if (dto.appointment_id) {
+        await this.recalcAppointmentCharge(dto.appointment_id);
+      }
+
       await this.redis.del(intraoralExamsKey(dto.patient_id));
       await this.redis.del(patientRecordKey(dto.patient_id));
       await this.redis.del(patientsKey());
+      if (dto.appointment_id) {
+        await this.redis.del(appointmentKey(dto.appointment_id));
+        await this.redis.del(appointmentsKey());
+      }
 
       void this.notificationHelper.notifyDoctor(
         id,
@@ -111,6 +127,7 @@ export class IntraoralExamService {
       response.data = { code: 0, data: exam };
       response.code = HttpStatus.CREATED;
     } catch (error) {
+      console.error('Error creating intraoral exam:', error);
       response.data = { code: ErrorCode.INTERNAL_SERVER_ERROR };
       response.code = HttpStatus.INTERNAL_SERVER_ERROR;
     } finally {
@@ -142,6 +159,12 @@ export class IntraoralExamService {
       await this.redis.del(intraoralExamsKey(exam.patient_id));
       await this.redis.del(patientRecordKey(exam.patient_id));
 
+      if (exam.appointment_id) {
+        await this.recalcAppointmentCharge(exam.appointment_id);
+        await this.redis.del(appointmentKey(exam.appointment_id));
+        await this.redis.del(appointmentsKey());
+      }
+
       response.data = { code: 0 };
       response.code = HttpStatus.OK;
     } catch (error) {
@@ -150,5 +173,33 @@ export class IntraoralExamService {
     } finally {
       expressResponse(res, response);
     }
+  }
+
+  private async recalcAppointmentCharge(appointmentId: string): Promise<void> {
+    await this.appointmentRepository.query(
+      `UPDATE appointments
+       SET
+         amount_charge = COALESCE(base_charge, amount_charge) + COALESCE(
+           (SELECT SUM((svc->>'amount_charge')::numeric)
+            FROM intraoral_exams ie,
+                 jsonb_array_elements(ie.services) AS svc
+            WHERE ie.appointment_id = $1
+              AND ie.services IS NOT NULL),
+           0
+         ),
+         balance = GREATEST(
+           COALESCE(base_charge, amount_charge) + COALESCE(
+             (SELECT SUM((svc->>'amount_charge')::numeric)
+              FROM intraoral_exams ie,
+                   jsonb_array_elements(ie.services) AS svc
+              WHERE ie.appointment_id = $1
+                AND ie.services IS NOT NULL),
+             0
+           ) - COALESCE(amount_paid, 0),
+           0
+         )
+       WHERE id = $1`,
+      [appointmentId],
+    );
   }
 }

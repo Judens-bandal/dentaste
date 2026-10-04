@@ -71,13 +71,31 @@ export class IntraoralExam {
 
   @Column({ type: 'jsonb', nullable: true })
   services: Array<{
-    service: EDentalService | string;
+    service?: EDentalService | string | null;
     service_type?: string;
-    service_other?: string;
+    service_other?: string | null;
+    amount_charge?: number;
   }> | null;
 
-  @Column({ name: 'appointment_id', type: 'uuid' })
+  @Column({ name: 'appointment_id', type: 'uuid', nullable: true })
   appointment_id: string | null;
+
+  @Column({
+    name: 'additional_service',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
+  additional_service: string | null;
+
+  @Column({
+    name: 'additional_charge',
+    type: 'numeric',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+  })
+  additional_charge: number | null;
 
   @ManyToOne(() => Appointment, (appointment) => appointment.intraoral_exams, {
     onDelete: 'SET NULL',

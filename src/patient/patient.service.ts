@@ -257,9 +257,34 @@ export class PatientService {
           ) AS tooth_records,
           a.service,
           a.service_type,
-          COALESCE(
-            (
-              SELECT JSONB_AGG(DISTINCT service_entry)
+          (
+            SELECT JSONB_AGG(entry_row)
+            FROM (
+              -- initial appointment service (always first)
+              SELECT jsonb_build_object(
+                'service', a.service,
+                'service_type', NULLIF(a.service_type, ''),
+                'service_other', a.service_other,
+                'amount_charge', a.base_charge,
+                'tooth_records', COALESCE(
+                  (SELECT ie.tooth_records
+                   FROM intraoral_exams ie
+                   WHERE ie.appointment_id = a.id
+                   ORDER BY ie.created_at ASC
+                   LIMIT 1),
+                  '[]'::jsonb
+                )
+              ) AS entry_row
+              WHERE a.service IS NOT NULL
+
+              UNION ALL
+
+              -- intraoral exam services
+              SELECT (
+                service_entry || jsonb_build_object(
+                  'tooth_records', COALESCE(ie.tooth_records, '[]'::jsonb)
+                )
+              ) AS entry_row
               FROM intraoral_exams ie
               CROSS JOIN LATERAL jsonb_array_elements(
                 CASE
@@ -268,17 +293,7 @@ export class PatientService {
                 END
               ) AS service_entry
               WHERE ie.appointment_id = a.id
-            ),
-            CASE
-              WHEN a.service IS NOT NULL THEN jsonb_build_array(
-                jsonb_build_object(
-                  'service', a.service,
-                  'service_type', NULLIF(a.service_type, ''),
-                  'service_other', a.service_other
-                )
-              )
-              ELSE '[]'::jsonb
-            END
+            ) AS all_entries
           ) AS services,
           a.branch,
           a.amount_charge,
@@ -321,7 +336,13 @@ export class PatientService {
         INNER JOIN appointments a 
           ON a.patient_id = p.id
         
-        LEFT JOIN payments py 
+        LEFT JOIN (
+          SELECT appointment_id,
+                 SUM(amount_paid) AS amount_paid,
+                 MAX(date_paid)   AS date_paid
+          FROM payments
+          GROUP BY appointment_id
+        ) py
           ON py.appointment_id = a.id
         
         WHERE

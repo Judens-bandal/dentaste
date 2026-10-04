@@ -261,6 +261,7 @@ export class AppointmentService {
         service_type: dto.service_type ?? '',
         treatment_done: dto.treatment_done ?? '',
         amount_charge: dto.amount_charge,
+        base_charge: dto.amount_charge,
         balance: dto.amount_charge,
         appointment_status: dto.appointment_status,
       });
@@ -416,6 +417,7 @@ export class AppointmentService {
         );
 
         const newAmountCharge = dto.amount_charge ?? existing.amount_charge;
+        const newBaseCharge = dto.amount_charge !== undefined ? dto.amount_charge : existing.base_charge;
         const newBalance =
           dto.amount_charge !== undefined
             ? Number(existing.balance) +
@@ -439,6 +441,7 @@ export class AppointmentService {
               ? dto.treatment_done
               : (existing.treatment_done ?? ''),
           amount_charge: newAmountCharge,
+          base_charge: newBaseCharge,
           balance: newBalance,
           appointment_status: newAppointmentStatus,
         };
