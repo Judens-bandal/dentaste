@@ -131,16 +131,18 @@ export class AppointmentService {
         data.push({
           id: appointment.id ?? null,
           patient_id: appointment.patient_id ?? null,
-          patient: {
-            last_name: appointment.patient?.last_name,
-            first_name: appointment.patient?.first_name,
-            middle_name: appointment.patient?.middle_name ?? null,
-            cellphone_number: appointment.patient?.cellphone_number ?? null,
-            address: appointment.patient?.address ?? null,
-            occupation: appointment.patient?.occupation ?? null,
-            age: appointment.patient?.age ?? null,
-            status: appointment.patient?.status ?? null,
-          },
+          patient: appointment.patient
+            ? {
+                last_name: appointment.patient.last_name ?? null,
+                first_name: appointment.patient.first_name ?? null,
+                middle_name: appointment.patient.middle_name ?? null,
+                cellphone_number: appointment.patient.cellphone_number ?? null,
+                address: appointment.patient.address ?? null,
+                occupation: appointment.patient.occupation ?? null,
+                age: appointment.patient.age ?? null,
+                status: appointment.patient.status ?? null,
+              }
+            : null,
           branch: appointment.branch,
           service: appointment.service,
           service_other: appointment.service_other ?? null,
@@ -273,7 +275,7 @@ export class AppointmentService {
       await this.redis.del(patientsKey());
 
       const patient = await this.patientRepository.findOne({
-        where: { id: saved.patient_id },
+        where: { id: dto.patient_id },
         select: { last_name: true, first_name: true, middle_name: true },
       });
 
@@ -409,15 +411,20 @@ export class AppointmentService {
         // separate check: same patient can't be at ANY branch at an
         // overlapping time, even if each branch individually has room.
         // Was missing here entirely — addAppointment already had it.
-        await assertNoPatientScheduleConflict(
-          this.appointmentRepository,
-          existing.patient_id,
-          newScheduledAt,
-          dto.id,
-        );
+        if (existing.patient_id) {
+          await assertNoPatientScheduleConflict(
+            this.appointmentRepository,
+            existing.patient_id,
+            newScheduledAt,
+            dto.id,
+          );
+        }
 
         const newAmountCharge = dto.amount_charge ?? existing.amount_charge;
-        const newBaseCharge = dto.amount_charge !== undefined ? dto.amount_charge : existing.base_charge;
+        const newBaseCharge =
+          dto.amount_charge !== undefined
+            ? dto.amount_charge
+            : existing.base_charge;
         const newBalance =
           dto.amount_charge !== undefined
             ? Number(existing.balance) +
@@ -451,10 +458,16 @@ export class AppointmentService {
         await this.redis.del(appointmentsKey());
         await this.redis.del(patientsKey());
 
-        const patient = await this.patientRepository.findOne({
-          where: { id: existing.patient_id },
-          select: { last_name: true, first_name: true, middle_name: true },
-        });
+        const patient = existing.patient_id
+          ? await this.patientRepository.findOne({
+              where: { id: existing.patient_id },
+              select: {
+                last_name: true,
+                first_name: true,
+                middle_name: true,
+              },
+            })
+          : null;
 
         void this.notificationHelper.notifyDoctors(
           EDoctorAppointmentNotification.APPOINTMENT_UPDATED,
@@ -525,16 +538,16 @@ export class AppointmentService {
         response.code = HttpStatus.NOT_FOUND;
         return;
       }
-      const patient = await this.patientRepository.findOne({
-        where: { id: appointment.patient_id },
-        select: { last_name: true, first_name: true, middle_name: true },
-      });
-
-      if (!patient) {
-        response.data = { code: ErrorCode.APPOINTMENT_NOT_FOUND };
-        response.code = HttpStatus.NOT_FOUND;
-        return;
-      }
+      const patient = appointment.patient_id
+        ? await this.patientRepository.findOne({
+            where: { id: appointment.patient_id },
+            select: {
+              last_name: true,
+              first_name: true,
+              middle_name: true,
+            },
+          })
+        : null;
       await this.appointmentRepository.delete({ id: dto.id });
       await this.redis.del(appointmentKey(dto.id));
       await this.redis.del(appointmentsKey());
@@ -542,7 +555,7 @@ export class AppointmentService {
 
       void this.notificationHelper.notifyDoctors(
         EDoctorAppointmentNotification.APPOINTMENT_DELETED,
-        `Appointment ${patient.last_name} ${patient.first_name} ${patient.middle_name || ''} was canceled.`,
+        `Appointment ${patient?.last_name ?? 'for an unassigned patient'} ${patient?.first_name ?? ''} ${patient?.middle_name || ''} was canceled.`,
       );
 
       response.data = { code: 0 };
@@ -599,10 +612,16 @@ export class AppointmentService {
       await this.redis.del(appointmentKey(dto.id));
       await this.redis.del(appointmentsKey());
 
-      const patient = await this.patientRepository.findOne({
-        where: { id: existing.patient_id },
-        select: { last_name: true, first_name: true, middle_name: true },
-      });
+      const patient = existing.patient_id
+        ? await this.patientRepository.findOne({
+            where: { id: existing.patient_id },
+            select: {
+              last_name: true,
+              first_name: true,
+              middle_name: true,
+            },
+          })
+        : null;
 
       void this.notificationHelper.notifyDoctors(
         EDoctorAppointmentNotification.APPOINTMENT_UPDATED,

@@ -160,14 +160,22 @@ export class PaymentService {
         await this.redis.del(appointmentKey(dto.appointment_id));
         await this.redis.del(appointmentsKey());
         await this.redis.del(paymentsKey());
-        await this.redis.del(patientRecordKey(appointment.patient_id));
+        if (appointment.patient_id) {
+          await this.redis.del(patientRecordKey(appointment.patient_id));
+        }
         await this.redis.incr(summaryVersionKey(appointment.branch));
         await this.redis.incr(summaryVersionKey());
 
-        const patient = await this.patientRepository.findOne({
-          where: { id: appointment.patient_id },
-          select: { last_name: true, first_name: true, middle_name: true },
-        });
+        const patient = appointment.patient_id
+          ? await this.patientRepository.findOne({
+              where: { id: appointment.patient_id },
+              select: {
+                last_name: true,
+                first_name: true,
+                middle_name: true,
+              },
+            })
+          : null;
 
         void this.notificationHelper.notifyDoctors(
           EDoctorNotification.PAYMENT_RECEIVED,
@@ -262,7 +270,9 @@ export class PaymentService {
         );
 
         await this.redis.del(appointmentKey(appointment.id));
-        await this.redis.del(patientRecordKey(appointment.patient_id));
+        if (appointment.patient_id) {
+          await this.redis.del(patientRecordKey(appointment.patient_id));
+        }
         await this.redis.incr(summaryVersionKey(appointment.branch));
         await this.redis.incr(summaryVersionKey());
       }
