@@ -12,6 +12,7 @@ import {
   IsDateString,
   ValidateIf,
   ValidateNested,
+  IsNumber,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import {
@@ -57,18 +58,24 @@ export class ToothRecordSnapshotDto {
 }
 
 export class IntraoralExamServiceEntryDto {
+  @IsOptional()
   @IsEnum(EDentalService)
-  service: EDentalService;
+  service?: EDentalService | null;
 
   @IsOptional()
   @IsString()
   @MaxLength(255)
   service_type?: string;
 
-  @ValidateIf((entry) => String(entry.service) === String(EDentalService.Other))
+  @IsOptional()
   @IsString()
   @MaxLength(255)
   service_other?: string;
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  amount_charge?: number;
 }
 
 export class CreateIntraoralExamDto {
@@ -132,6 +139,16 @@ export class CreateIntraoralExamDto {
   @ValidateNested({ each: true })
   @Type(() => ToothRecordSnapshotDto)
   tooth_records?: ToothRecordSnapshotDto[];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  additional_service?: string;
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  additional_charge?: number;
 }
 
 export class GetIntraoralExamDto {

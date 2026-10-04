@@ -51,8 +51,6 @@ export class Appointment {
   })
   service_other: string | null;
 
-  // holds the mini-enum value (EBraceType | EDentureType | EOdontectomyType |
-  // EToothExtractionType | EVeneerType) for services that have sub-choices
   @Column({ name: 'service_type', type: 'varchar', length: 30, nullable: true })
   service_type: string | null;
 
@@ -67,6 +65,24 @@ export class Appointment {
     default: 0,
   })
   amount_charge: number;
+
+  @Column({
+    name: 'base_charge',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0,
+  })
+  base_charge: number;
+
+  @Column({
+    name: 'amount_paid',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0,
+  })
+  amount_paid: number;
 
   // Read-only from the app side — maintained by DB triggers.
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
