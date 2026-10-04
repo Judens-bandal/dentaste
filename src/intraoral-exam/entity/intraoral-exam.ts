@@ -24,12 +24,12 @@ export class IntraoralExam {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'patient_id', type: 'uuid', nullable: false })
-  patient_id: string;
+  @Column({ name: 'patient_id', type: 'uuid', nullable: true })
+  patient_id: string | null;
 
-  @ManyToOne(() => Patient, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Patient, { onDelete: 'CASCADE', nullable: true })
   @JoinColumn({ name: 'patient_id' })
-  patient: Patient;
+  patient: Patient | null;
 
   @Column({ name: 'exam_date', type: 'date' })
   exam_date: string;
