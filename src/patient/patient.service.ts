@@ -10,7 +10,11 @@ import {
 } from '../../utils/common.interface';
 import { Response } from 'express';
 import { ErrorCode } from '../../utils/common.enum';
-import { expressResponse, extractUser } from '../../utils/common.helper';
+import {
+  expressResponse,
+  extractUser,
+  formatDateTime,
+} from '../../utils/common.helper';
 import {
   CreatePatientDto,
   GetPatientDto,
@@ -239,17 +243,17 @@ export class PatientService {
         return;
       }
       const query = `
-          SELECT
+        SELECT
           p.last_name,
           p.first_name,
           p.age,
           p.sex,
-          a.scheduled_at::date AS scheduled_at,
+          a.scheduled_at AS scheduled_at,
           COALESCE(
             (
               SELECT jsonb_agg(elem)
               FROM intraoral_exams ie,
-                   jsonb_array_elements(ie.tooth_records) AS elem
+                  jsonb_array_elements(ie.tooth_records) AS elem
               WHERE ie.appointment_id = a.id
                 AND ie.tooth_records IS NOT NULL
             )::text,
@@ -265,13 +269,13 @@ export class PatientService {
                 'service', a.service,
                 'service_type', NULLIF(a.service_type, ''),
                 'service_other', a.service_other,
-                'amount_charge', a.base_charge,
+                'amount_charge', COALESCE(a.base_charge, a.amount_charge),
                 'tooth_records', COALESCE(
                   (SELECT ie.tooth_records
-                   FROM intraoral_exams ie
-                   WHERE ie.appointment_id = a.id
-                   ORDER BY ie.created_at ASC
-                   LIMIT 1),
+                  FROM intraoral_exams ie
+                  WHERE ie.appointment_id = a.id
+                  ORDER BY ie.created_at ASC
+                  LIMIT 1),
                   '[]'::jsonb
                 )
               ) AS entry_row
@@ -297,68 +301,77 @@ export class PatientService {
           ) AS services,
           a.branch,
           a.amount_charge,
-          COALESCE(py.amount_paid, 0) AS amount_paid,
+          payment_summary.amount_paid,
           a.balance,
           
           CASE 
-            WHEN a.balance = 0 AND py.amount_paid > 0 THEN 'PAID'
-            WHEN a.balance > 0 AND py.amount_paid > 0 THEN 'PARTIAL PAYMENT'
+            WHEN a.balance = 0 AND payment_summary.amount_paid > 0 THEN 'PAID'
+            WHEN a.balance > 0 AND payment_summary.amount_paid > 0 THEN 'PARTIAL PAYMENT'
             WHEN a.appointment_status = 'SCHEDULED' THEN 'SCHEDULED'
             ELSE a.appointment_status
           END AS status,
           
-          py.date_paid,
+          payment_summary.date_paid,
           
-          CASE 
-            WHEN a.appointment_status = 'SCHEDULED' THEN
-              (SELECT a_next.scheduled_at::date 
-              FROM appointments a_next
-              WHERE a_next.patient_id = p.id 
-              AND a_next.appointment_status = 'SCHEDULED'
-              ORDER BY a_next.scheduled_at ASC
-              LIMIT 1)
-            ELSE NULL
-          END AS next_appt_date,
+          (SELECT a_next.scheduled_at
+          FROM appointments a_next
+          WHERE a_next.patient_id = p.id
+            AND a_next.id <> a.id
+            AND a_next.scheduled_at > NOW()
+            AND a_next.appointment_status NOT IN ('CANCELLED', 'NO_SHOW')
+          ORDER BY
+            ABS(EXTRACT(EPOCH FROM (a_next.scheduled_at - a.scheduled_at))) ASC,
+            a_next.scheduled_at ASC,
+            a_next.id ASC
+          LIMIT 1) AS next_appt_date,
           
-          CASE 
-            WHEN a.appointment_status = 'SCHEDULED' THEN
-              (SELECT a_next.service 
-              FROM appointments a_next
-              WHERE a_next.patient_id = p.id 
-              AND a_next.appointment_status = 'SCHEDULED'
-              ORDER BY a_next.scheduled_at ASC
-              LIMIT 1)
-            ELSE NULL
-          END AS next_appt_procedure
+          (SELECT a_next.service
+          FROM appointments a_next
+          WHERE a_next.patient_id = p.id
+            AND a_next.id <> a.id
+            AND a_next.scheduled_at > NOW()
+            AND a_next.appointment_status NOT IN ('CANCELLED', 'NO_SHOW')
+          ORDER BY
+            ABS(EXTRACT(EPOCH FROM (a_next.scheduled_at - a.scheduled_at))) ASC,
+            a_next.scheduled_at ASC,
+            a_next.id ASC
+          LIMIT 1) AS next_appt_procedure
 
         FROM patients p
         
         INNER JOIN appointments a 
           ON a.patient_id = p.id
-        
-        LEFT JOIN (
-          SELECT appointment_id,
-                 SUM(amount_paid) AS amount_paid,
-                 MAX(date_paid)   AS date_paid
-          FROM payments
-          GROUP BY appointment_id
-        ) py
-          ON py.appointment_id = a.id
+
+        LEFT JOIN LATERAL (
+          SELECT
+            COALESCE(SUM(payment.amount_paid), 0) AS amount_paid,
+            MAX(payment.date_paid) AS date_paid
+          FROM payments payment
+          WHERE payment.appointment_id = a.id
+        ) payment_summary ON TRUE
         
         WHERE
           p.id = $1
           AND (
             (a.appointment_status = 'SCHEDULED' AND a.balance > 0)
-            OR (a.balance > 0 AND py.amount_paid > 0)
+            OR (a.balance > 0 AND a.amount_paid > 0)
             OR (a.balance = 0)
           )
         
         ORDER BY a.scheduled_at DESC;
       `;
 
-      const data: IPatientRecord[] = await this.patientRepository.query(query, [
-        dto.id,
-      ]);
+      const rawData: IPatientRecord[] = await this.patientRepository.query(
+        query,
+        [dto.id],
+      );
+      const data = rawData.map((record) => ({
+        ...record,
+        scheduled_at: formatDateTime(record.scheduled_at),
+        next_appt_date: record.next_appt_date
+          ? formatDateTime(record.next_appt_date)
+          : null,
+      }));
 
       await this.redis.set(cachekey, data);
 

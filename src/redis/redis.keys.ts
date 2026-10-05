@@ -20,7 +20,7 @@ export const patientKey = (id: string) => `${env()}:dentaste:patient:${id}`;
 export const patientsKey = () => `${env()}:dentaste:patients`;
 
 export const patientRecordKey = (id: string) =>
-  `${env()}:dentaste:patient:${id}:record`;
+  `${env()}:dentaste:patient:${id}:record:v6`;
 
 export const patientsByStatusKey = (status: string) =>
   `${env()}:dentaste:patients:status:${status}`;
