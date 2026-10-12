@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { versionBump } from '../main';
 
 @Controller('health')
 @UseInterceptors(HealthLoggingInterceptor)
@@ -46,5 +47,10 @@ export class HealthController {
         }),
     ]);
     this.logger.log(`Health status: ${result.status}`);
+  }
+
+  @Get('/system')
+  systemHealth() {
+    return versionBump;
   }
 }

@@ -8,6 +8,11 @@ import {
   SwaggerDocumentOptions,
   SwaggerModule,
 } from '@nestjs/swagger';
+import { safeParser } from '../utils/common.helper';
+import * as fs from 'fs';
+import * as path from 'path';
+
+export let versionBump: { version: any; env: string | undefined } | null = null;
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -91,6 +96,20 @@ async function bootstrap() {
       operationsSorter: 'alpha',
     },
   });
+  const env = process.env.ENVIRONMENT;
+
+  try {
+    const versionPath = path.join(__dirname, '/common/assets/version.json');
+
+    if (fs.existsSync(versionPath)) {
+      const raw = fs.readFileSync(versionPath, 'utf8').trim();
+      const data = safeParser<any>(raw);
+
+      if (data) versionBump = { version: data?.bump?.version, env: env };
+    }
+  } catch (error) {
+    versionBump = { version: 'N/A', env: env };
+  }
 
   app.useGlobalInterceptors(new TransformInterceptor());
   await app.listen(process.env.PORT ?? 5000);
