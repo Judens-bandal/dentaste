@@ -235,13 +235,13 @@ export class PatientService {
         return;
       }
 
-      const cachekey = patientRecordKey(dto.id);
-      const cacheData = await this.redis.get<IPatientRecord[]>(cachekey);
-      if (cacheData) {
-        response.data = { code: 0, data: cacheData };
-        response.code = HttpStatus.OK;
-        return;
-      }
+      // const cachekey = patientRecordKey(dto.id);
+      // const cacheData = await this.redis.get<IPatientRecord[]>(cachekey);
+      // if (cacheData) {
+      //   response.data = { code: 0, data: cacheData };
+      //   response.code = HttpStatus.OK;
+      //   return;
+      // }
       const query = `
         SELECT
           p.last_name,
@@ -373,7 +373,7 @@ export class PatientService {
           : null,
       }));
 
-      await this.redis.set(cachekey, data);
+      // await this.redis.set(cachekey, data);
 
       response.data = { code: 0, data };
       response.code = HttpStatus.OK;

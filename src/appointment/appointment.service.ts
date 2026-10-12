@@ -262,9 +262,9 @@ export class AppointmentService {
         service_other: selectedCustomService ?? null,
         service_type: dto.service_type ?? '',
         treatment_done: dto.treatment_done ?? '',
-        amount_charge: dto.amount_charge,
-        base_charge: dto.amount_charge,
-        balance: dto.amount_charge,
+        amount_charge: dto.amount_charge ?? 0,
+        base_charge: dto.amount_charge ?? 0,
+        balance: dto.amount_charge ?? 0,
         appointment_status: dto.appointment_status,
       });
 

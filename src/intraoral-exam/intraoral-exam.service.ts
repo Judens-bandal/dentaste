@@ -7,7 +7,11 @@ import { IntraoralExam } from './entity/intraoral-exam';
 import { Appointment } from '../appointment/entity/appointment';
 import { ICustomRequest, IResponse } from '../../utils/common.interface';
 import { ErrorCode } from '../../utils/common.enum';
-import { expressResponse, extractUser } from '../../utils/common.helper';
+import {
+  expressResponse,
+  extractUser,
+  formatDateTime,
+} from '../../utils/common.helper';
 import {
   CreateIntraoralExamDto,
   GetIntraoralExamDto,
@@ -90,7 +94,7 @@ export class IntraoralExamService {
       const exam = this.intraoralExamRepository.create({
         patient_id: dto.patient_id,
         appointment_id: dto.appointment_id,
-        exam_date: dto.exam_date,
+        exam_date: formatDateTime(dto.exam_date),
         periodontal: dto.periodontal ?? null,
         occlusion: dto.occlusion ?? null,
         appliances: dto.appliances ?? null,
