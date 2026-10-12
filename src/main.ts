@@ -97,15 +97,16 @@ async function bootstrap() {
     },
   });
   const env = process.env.ENVIRONMENT;
+  versionBump = { version: 'N/A', env: env };
 
   try {
-    const versionPath = path.join(__dirname, '/common/assets/version.json');
+    const versionPath = path.join(__dirname, 'assets', 'version.json');
 
     if (fs.existsSync(versionPath)) {
       const raw = fs.readFileSync(versionPath, 'utf8').trim();
       const data = safeParser<any>(raw);
 
-      if (data) versionBump = { version: data?.bump?.version, env: env };
+      versionBump = { version: data?.bump?.version ?? 'N/A', env: env };
     }
   } catch (error) {
     versionBump = { version: 'N/A', env: env };

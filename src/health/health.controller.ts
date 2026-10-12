@@ -10,7 +10,9 @@ import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { versionBump } from '../main';
+import { Public } from '../../common/commons/decorator/jwt.decorator';
 
+@Public()
 @Controller('health')
 @UseInterceptors(HealthLoggingInterceptor)
 // @ApiBearerAuth()
@@ -28,7 +30,6 @@ export class HealthController {
 
   @Get()
   @HealthCheck()
-  //   @Public()
   check() {
     return this.health.check([
       () =>

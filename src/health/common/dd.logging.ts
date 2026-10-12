@@ -14,6 +14,8 @@ export class HealthLoggingInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler) {
     return next.handle().pipe(
       tap((result) => {
+        if (!result?.status) return;
+
         this.logger.log(
           `Status: ${result.status} | DB: ${result.info?.database?.status ?? 'db'}`,
         );
