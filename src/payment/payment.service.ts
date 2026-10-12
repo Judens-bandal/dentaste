@@ -105,6 +105,17 @@ export class PaymentService {
           return;
         }
 
+        if (Number(appointment.amount_charge) <= 0) {
+          await queryRunner.rollbackTransaction();
+          response.data = {
+            code: ErrorCode.CHARGE_NOT_SET,
+            message:
+              'No charge has been set for this appointment yet. Add the service in the intraoral exam first.',
+          };
+          response.code = HttpStatus.BAD_REQUEST;
+          return;
+        }
+
         const currentBalance = Number(appointment.balance);
 
         if (dto.amount_paid > currentBalance) {
@@ -126,23 +137,36 @@ export class PaymentService {
 
         const saved = await queryRunner.manager.save(payment);
 
-        const newBalance = Number(appointment.balance) - dto.amount_paid;
-        const appointmentUpdate: Partial<Appointment> = {
-          balance: newBalance,
-        };
+        // const newBalance = Number(appointment.balance) - dto.amount_paid;
+        // const appointmentUpdate: Partial<Appointment> = {
+        //   balance: newBalance,
+        // };
+
+        // if (
+        //   appointment.appointment_status !== EAppointmentStatus.NO_SHOW &&
+        //   appointment.appointment_status !== EAppointmentStatus.CANCELLED
+        // ) {
+        //   appointmentUpdate.appointment_status =
+        //     newBalance <= 0
+        //       ? EAppointmentStatus.COMPLETED
+        //       : appointment.appointment_status === EAppointmentStatus.COMPLETED
+        //         ? EAppointmentStatus.SCHEDULED
+        //         : appointment.appointment_status;
+        // }
+        const newBalance = currentBalance - dto.amount_paid;
+        const appointmentUpdate: Partial<Appointment> = { balance: newBalance };
 
         if (
           appointment.appointment_status !== EAppointmentStatus.NO_SHOW &&
           appointment.appointment_status !== EAppointmentStatus.CANCELLED
         ) {
           appointmentUpdate.appointment_status =
-            newBalance <= 0
+            Number(appointment.amount_charge) > 0 && newBalance <= 0
               ? EAppointmentStatus.COMPLETED
               : appointment.appointment_status === EAppointmentStatus.COMPLETED
                 ? EAppointmentStatus.SCHEDULED
                 : appointment.appointment_status;
         }
-
         await queryRunner.manager.update(
           Appointment,
           { id: dto.appointment_id },

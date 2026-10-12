@@ -264,7 +264,6 @@ export class PatientService {
           (
             SELECT JSONB_AGG(entry_row)
             FROM (
-              -- initial appointment service (always first)
               SELECT jsonb_build_object(
                 'service', a.service,
                 'service_type', NULLIF(a.service_type, ''),
@@ -280,6 +279,21 @@ export class PatientService {
                 )
               ) AS entry_row
               WHERE a.service IS NOT NULL
+                AND (
+                  COALESCE(a.base_charge, a.amount_charge, 0) > 0
+                  OR NOT EXISTS (
+                    SELECT 1
+                    FROM intraoral_exams existing_exam
+                    WHERE existing_exam.appointment_id = a.id
+                      AND jsonb_array_length(
+                        CASE
+                          WHEN jsonb_typeof(existing_exam.services) = 'array'
+                            THEN existing_exam.services
+                          ELSE '[]'::jsonb
+                        END
+                      ) > 0
+                  )
+                )
 
               UNION ALL
 
@@ -305,6 +319,7 @@ export class PatientService {
           a.balance,
           
           CASE 
+            WHEN a.appointment_status = 'SCHEDULED' AND COALESCE(a.amount_charge, 0) <= 0 THEN 'PENDING'
             WHEN a.balance = 0 AND payment_summary.amount_paid > 0 THEN 'PAID'
             WHEN a.balance > 0 AND payment_summary.amount_paid > 0 THEN 'PARTIAL PAYMENT'
             WHEN a.appointment_status = 'SCHEDULED' THEN 'SCHEDULED'
@@ -316,23 +331,23 @@ export class PatientService {
           (SELECT a_next.scheduled_at
           FROM appointments a_next
           WHERE a_next.patient_id = p.id
-            AND a_next.id <> a.id
             AND a_next.scheduled_at > NOW()
-            AND a_next.appointment_status NOT IN ('CANCELLED', 'NO_SHOW')
+            AND a_next.appointment_status = 'SCHEDULED'
           ORDER BY
-            ABS(EXTRACT(EPOCH FROM (a_next.scheduled_at - a.scheduled_at))) ASC,
             a_next.scheduled_at ASC,
             a_next.id ASC
           LIMIT 1) AS next_appt_date,
           
-          (SELECT a_next.service
+          (SELECT CASE
+            WHEN a_next.service = 'other'
+              THEN COALESCE(NULLIF(TRIM(a_next.service_other), ''), a_next.service)
+            ELSE a_next.service
+          END
           FROM appointments a_next
           WHERE a_next.patient_id = p.id
-            AND a_next.id <> a.id
             AND a_next.scheduled_at > NOW()
-            AND a_next.appointment_status NOT IN ('CANCELLED', 'NO_SHOW')
+            AND a_next.appointment_status = 'SCHEDULED'
           ORDER BY
-            ABS(EXTRACT(EPOCH FROM (a_next.scheduled_at - a.scheduled_at))) ASC,
             a_next.scheduled_at ASC,
             a_next.id ASC
           LIMIT 1) AS next_appt_procedure

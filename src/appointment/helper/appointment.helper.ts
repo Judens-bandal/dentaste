@@ -29,6 +29,9 @@ export function getPaymentStatus(
   debitAmount: number,
   balance: number,
 ): EPaymentStatus {
+  if (!Number.isFinite(debitAmount) || debitAmount <= 0) {
+    return EPaymentStatus.PENDING;
+  }
   if (balance <= 0) return EPaymentStatus.PAID;
   if (balance < debitAmount) return EPaymentStatus.PARTIAL;
   return EPaymentStatus.UNPAID;

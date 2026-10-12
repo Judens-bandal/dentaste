@@ -70,7 +70,7 @@ export interface IAppointment {
   service_type: string | null;
   treatment_done: string | null;
   scheduled_at: string;
-  amount_charger: number;
+  amount_charge: number;
   balance: number;
   appointment_status: EAppointmentStatus;
   payment_status: EPaymentStatus;

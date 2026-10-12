@@ -110,6 +110,7 @@ export enum EAppointmentStatus {
 }
 
 export enum EPaymentStatus {
+  PENDING = 'PENDING',
   PAID = 'PAID',
   PARTIAL = 'PARTIAL',
   UNPAID = 'UNPAID',

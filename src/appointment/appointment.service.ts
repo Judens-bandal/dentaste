@@ -85,8 +85,30 @@ export class AppointmentService {
       const cachekey = appointmentsKey();
       const cacheData = await this.redis.get<IAppointments[]>(cachekey);
       if (cacheData) {
+        const data = cacheData.map((appointment) => {
+          const legacyAppointment = appointment as IAppointments & {
+            amount_charger?: number;
+          };
+          const parsedCharge = Number(
+            legacyAppointment.amount_charge ??
+              legacyAppointment.amount_charger ??
+              0,
+          );
+          const amount_charge = Number.isFinite(parsedCharge)
+            ? parsedCharge
+            : 0;
+          const balance = Number(appointment.balance);
+
+          return {
+            ...legacyAppointment,
+            amount_charge,
+            balance,
+            payment_status: getPaymentStatus(amount_charge, balance),
+          };
+        });
+
         response.code = HttpStatus.OK;
-        response.data = { code: 0, data: cacheData };
+        response.data = { code: 0, data };
         return;
       }
 
@@ -149,7 +171,7 @@ export class AppointmentService {
           service_type: appointment.service_type ?? null,
           treatment_done: appointment.treatment_done ?? null,
           scheduled_at: formatDateTime(appointment.scheduled_at),
-          amount_charger: amount_charge,
+          amount_charge,
           balance,
           appointment_status: appointment.appointment_status,
           payment_status: getPaymentStatus(amount_charge, balance),
