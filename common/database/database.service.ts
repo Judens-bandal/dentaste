@@ -12,14 +12,14 @@ export class DatabaseService implements OnApplicationBootstrap {
   ) {}
 
   async onApplicationBootstrap() {
-    await this.intraoralExamsTable();
-    await this.intraoralExamsServicesMigration();
-    await this.intraoralExamsAppointmentMigration();
-    await this.intraoralExamsFkMigration();
-    await this.appointmentAmountPaidMigration();
-    await this.appointmentBaseChargeMigration();
-    await this.appointmentServiceOtherMigration();
-    await this.appointmentServicesMigration();
+    // await this.intraoralExamsTable();
+    // await this.intraoralExamsServicesMigration();
+    // await this.intraoralExamsAppointmentMigration();
+    // await this.intraoralExamsFkMigration();
+    // await this.appointmentAmountPaidMigration();
+    // await this.appointmentBaseChargeMigration();
+    // await this.appointmentServiceOtherMigration();
+    // await this.appointmentServicesMigration();
     // await this.createIndexes();
   }
 
@@ -990,6 +990,15 @@ export class DatabaseService implements OnApplicationBootstrap {
           NEW.balance := NEW.amount_charge - COALESCE(
             (SELECT SUM(amount_paid) FROM payments WHERE appointment_id = NEW.id), 0
           );
+
+          IF NEW.appointment_status NOT IN ('NO_SHOW', 'CANCELLED') THEN
+            IF NEW.balance > 0 AND NEW.appointment_status = 'COMPLETED' THEN
+              NEW.appointment_status := 'SCHEDULED';
+            ELSIF NEW.balance <= 0 AND NEW.amount_charge > 0 THEN
+              NEW.appointment_status := 'COMPLETED';
+            END IF;
+          END IF;
+
           RETURN NEW;
         END;
         $$ LANGUAGE plpgsql;

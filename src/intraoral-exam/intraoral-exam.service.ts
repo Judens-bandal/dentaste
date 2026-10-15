@@ -183,28 +183,45 @@ export class IntraoralExamService {
 
   private async recalcAppointmentCharge(appointmentId: string): Promise<void> {
     await this.appointmentRepository.query(
-      `UPDATE appointments
-       SET
-         amount_charge = COALESCE(base_charge, amount_charge) + COALESCE(
-           (SELECT SUM((svc->>'amount_charge')::numeric)
-            FROM intraoral_exams ie,
-                 jsonb_array_elements(ie.services) AS svc
-            WHERE ie.appointment_id = $1
-              AND ie.services IS NOT NULL),
-           0
-         ),
-         balance = GREATEST(
-           COALESCE(base_charge, amount_charge) + COALESCE(
+      `WITH totals AS (
+         SELECT
+           a.id,
+           COALESCE(a.base_charge, a.amount_charge) + COALESCE(
              (SELECT SUM((svc->>'amount_charge')::numeric)
-              FROM intraoral_exams ie,
-                   jsonb_array_elements(ie.services) AS svc
-              WHERE ie.appointment_id = $1
-                AND ie.services IS NOT NULL),
+              FROM intraoral_exams ie
+              CROSS JOIN LATERAL jsonb_array_elements(
+                CASE
+                  WHEN jsonb_typeof(ie.services) = 'array' THEN ie.services
+                  ELSE '[]'::jsonb
+                END
+              ) AS svc
+              WHERE ie.appointment_id = a.id),
              0
-           ) - COALESCE(amount_paid, 0),
-           0
-         )
-       WHERE id = $1`,
+           ) AS amount_charge,
+           COALESCE(
+             (SELECT SUM(p.amount_paid)
+              FROM payments p
+              WHERE p.appointment_id = a.id),
+             0
+           ) AS amount_paid
+         FROM appointments a
+         WHERE a.id = $1
+       )
+       UPDATE appointments a
+       SET
+         amount_charge = totals.amount_charge,
+         balance = GREATEST(totals.amount_charge - totals.amount_paid, 0),
+         appointment_status = CASE
+           WHEN a.appointment_status IN ('NO_SHOW', 'CANCELLED')
+             THEN a.appointment_status
+           WHEN totals.amount_charge - totals.amount_paid > 0
+             AND a.appointment_status = 'COMPLETED' THEN 'SCHEDULED'
+           WHEN totals.amount_charge - totals.amount_paid <= 0
+             AND totals.amount_charge > 0 THEN 'COMPLETED'
+           ELSE a.appointment_status
+         END
+       FROM totals
+       WHERE a.id = totals.id`,
       [appointmentId],
     );
   }

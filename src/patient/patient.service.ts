@@ -300,7 +300,7 @@ export class PatientService {
               -- intraoral exam services
               SELECT (
                 service_entry || jsonb_build_object(
-                  'tooth_records', COALESCE(ie.tooth_records, '[]'::jsonb)
+                  'tooth_records', NULLIF(ie.tooth_records, '[]'::jsonb)
                 )
               ) AS entry_row
               FROM intraoral_exams ie
@@ -328,29 +328,23 @@ export class PatientService {
           
           payment_summary.date_paid,
           
-          (SELECT a_next.scheduled_at
-          FROM appointments a_next
-          WHERE a_next.patient_id = p.id
-            AND a_next.scheduled_at > NOW()
-            AND a_next.appointment_status = 'SCHEDULED'
-          ORDER BY
-            a_next.scheduled_at ASC,
-            a_next.id ASC
-          LIMIT 1) AS next_appt_date,
+          CASE
+            WHEN a.scheduled_at > NOW()
+              AND a.appointment_status = 'SCHEDULED'
+            THEN a.scheduled_at
+            ELSE NULL
+          END AS next_appt_date,
           
-          (SELECT CASE
-            WHEN a_next.service = 'other'
-              THEN COALESCE(NULLIF(TRIM(a_next.service_other), ''), a_next.service)
-            ELSE a_next.service
-          END
-          FROM appointments a_next
-          WHERE a_next.patient_id = p.id
-            AND a_next.scheduled_at > NOW()
-            AND a_next.appointment_status = 'SCHEDULED'
-          ORDER BY
-            a_next.scheduled_at ASC,
-            a_next.id ASC
-          LIMIT 1) AS next_appt_procedure
+          CASE
+            WHEN a.scheduled_at > NOW()
+              AND a.appointment_status = 'SCHEDULED'
+            THEN CASE
+              WHEN a.service = 'other'
+                THEN COALESCE(NULLIF(TRIM(a.service_other), ''), a.service)
+              ELSE a.service
+            END
+            ELSE NULL
+          END AS next_appt_procedure
 
         FROM patients p
         
