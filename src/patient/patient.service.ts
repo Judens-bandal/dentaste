@@ -300,7 +300,7 @@ export class PatientService {
               -- intraoral exam services
               SELECT (
                 service_entry || jsonb_build_object(
-                  'tooth_records', NULLIF(ie.tooth_records, '[]'::jsonb)
+                  'tooth_records', COALESCE(ie.tooth_records, '[]'::jsonb)
                 )
               ) AS entry_row
               FROM intraoral_exams ie
