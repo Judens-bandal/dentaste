@@ -63,4 +63,6 @@ export class RedisCacheService {
       return 0;
     }
   }
+
+  client;
 }

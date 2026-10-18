@@ -1,5 +1,5 @@
 // payments/payment.service.ts
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Response } from 'express';
@@ -24,6 +24,7 @@ import {
   extractUser,
   formatDateTime,
   getYearDateRange,
+  getYearDateRangeb,
   rangeValidator,
 } from '../../utils/common.helper';
 import {
@@ -45,9 +46,14 @@ import {
   GetAnnualSummaryDto,
   GetPaymentDto,
   GetTotalPaymentsDto,
+  IMonthlyBranchRevenue,
+  MONTH_LABELS,
+  TMonthlyBranchRow,
 } from './dto/payment';
 import { EAppointmentStatus, EBranch } from '../appointment/enum/appointment';
 import { PATIENT_TTL, PAYMENTS_TTL } from '../redis/redis.ttl';
+import { ChainableCommander, Redis } from 'ioredis';
+import { REDIS_CLIENT } from '../redis/redis-con.module';
 
 @Injectable()
 export class PaymentService {
@@ -64,9 +70,41 @@ export class PaymentService {
     @InjectDataSource('main_repo')
     private readonly dataSource: DataSource,
 
-    private readonly redis: RedisCacheService,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
     private readonly notificationHelper: NotificationHelper,
   ) {}
+
+  async getTotalPayments(req: ICustomRequest, res: Response) {
+    const response: IResponse = { code: HttpStatus.ACCEPTED, data: null };
+
+    try {
+      // const { id } = extractUser(req);
+      // if (!id) {
+      //   response.data = { code: ErrorCode.MISSING_ID };
+      //   response.code = HttpStatus.BAD_REQUEST;
+      //   return;
+      // }
+      // const cachekey = patientsKey();
+      // const cached = await this.readCache<IPatient[]>(cachekey);
+      // if (cached) {
+      //   response.data = { code: 0, data: cached.length };
+      //   response.code = HttpStatus.OK;
+      //   return;
+      // }
+      const total = await this.paymentRepository.count();
+      // await this.writeCache(cachekey, total, PATIENT_TTL);
+      response.data = { code: 0, data: total };
+      response.code = HttpStatus.OK;
+    } catch (error) {
+      response.data = {
+        code: ErrorCode.INTERNAL_SERVER_ERROR,
+        message: error.message,
+      };
+      response.code = HttpStatus.INTERNAL_SERVER_ERROR;
+    } finally {
+      expressResponse(res, response);
+    }
+  }
 
   async createPayment(
     dto: CreatePaymentDto,
@@ -88,11 +126,6 @@ export class PaymentService {
       await queryRunner.startTransaction();
 
       try {
-        // pessimistic_write locks this appointment row until commit/rollback —
-        // if two payments for the SAME appointment arrive at nearly the same
-        // instant, the second one blocks here until the first transaction
-        // finishes, so it re-reads the balance AFTER the first payment
-        // actually landed, instead of both racing off a stale read.
         const appointment = await queryRunner.manager.findOne(Appointment, {
           where: { id: dto.appointment_id },
           lock: { mode: 'pessimistic_write' },
@@ -137,22 +170,6 @@ export class PaymentService {
 
         const saved = await queryRunner.manager.save(payment);
 
-        // const newBalance = Number(appointment.balance) - dto.amount_paid;
-        // const appointmentUpdate: Partial<Appointment> = {
-        //   balance: newBalance,
-        // };
-
-        // if (
-        //   appointment.appointment_status !== EAppointmentStatus.NO_SHOW &&
-        //   appointment.appointment_status !== EAppointmentStatus.CANCELLED
-        // ) {
-        //   appointmentUpdate.appointment_status =
-        //     newBalance <= 0
-        //       ? EAppointmentStatus.COMPLETED
-        //       : appointment.appointment_status === EAppointmentStatus.COMPLETED
-        //         ? EAppointmentStatus.SCHEDULED
-        //         : appointment.appointment_status;
-        // }
         const newBalance = currentBalance - dto.amount_paid;
         const appointmentUpdate: Partial<Appointment> = { balance: newBalance };
 
@@ -174,22 +191,15 @@ export class PaymentService {
         );
 
         await queryRunner.commitTransaction();
-
-        // cache invalidation happens AFTER commit — otherwise a request
-        // hitting the cache mid-transaction could re-populate it with the
-        // pre-payment balance before the commit actually lands.
-        // paymentsKey() was previously missing here — without it, getPayments()
-        // would keep serving a stale list (missing this new payment) until
-        // PAYMENTS_TTL expired naturally.
-        await this.redis.del(appointmentKey(dto.appointment_id));
-        await this.redis.del(appointmentsKey());
-        await this.redis.del(paymentsKey());
-        if (appointment.patient_id) {
-          await this.redis.del(patientRecordKey(appointment.patient_id));
-        }
-        await this.redis.incr(summaryVersionKey(appointment.branch));
-        await this.redis.incr(summaryVersionKey());
-
+        await this.invalidate((p) => {
+          p.del(appointmentKey(dto.appointment_id));
+          p.del(appointmentsKey());
+          p.del(paymentsKey());
+          if (appointment.patient_id)
+            p.del(patientRecordKey(appointment.patient_id));
+          p.incr(summaryVersionKey(appointment.branch));
+          p.incr(summaryVersionKey());
+        });
         const patient = appointment.patient_id
           ? await this.patientRepository.findOne({
               where: { id: appointment.patient_id },
@@ -292,17 +302,23 @@ export class PaymentService {
           { id: appointment.id },
           { balance: newBalance, appointment_status: newStatus },
         );
-
-        await this.redis.del(appointmentKey(appointment.id));
-        if (appointment.patient_id) {
-          await this.redis.del(patientRecordKey(appointment.patient_id));
-        }
-        await this.redis.incr(summaryVersionKey(appointment.branch));
-        await this.redis.incr(summaryVersionKey());
+        await this.invalidate((p) => {
+          p.del(appointmentsKey());
+          p.del(paymentsKey());
+          if (appointment) {
+            p.del(appointmentKey(appointment.id));
+            if (appointment.patient_id)
+              p.del(patientRecordKey(appointment.patient_id));
+            p.incr(summaryVersionKey(appointment.branch));
+            p.incr(summaryVersionKey());
+          }
+        });
       }
 
-      await this.redis.del(appointmentsKey());
-      await this.redis.del(paymentsKey());
+      const pipeline = this.redis.pipeline();
+      pipeline.del(appointmentsKey());
+      pipeline.del(paymentsKey());
+      await pipeline.exec();
 
       response.data = { code: 0 };
       response.code = HttpStatus.OK;
@@ -327,11 +343,15 @@ export class PaymentService {
       }
 
       const cachekey = paymentsKey();
-      const cacheData = await this.redis.get<IPayment[]>(cachekey);
-      if (cacheData) {
-        response.code = HttpStatus.OK;
-        response.data = { code: 0, data: cacheData };
-        return;
+      const cached = await this.redis.get(cachekey);
+      if (cached) {
+        try {
+          response.code = HttpStatus.OK;
+          response.data = { code: 0, data: JSON.parse(cached) as IPayment[] };
+          return;
+        } catch {
+          await this.redis.del(cachekey); // corrupt entry, fall through to DB
+        }
       }
 
       const payments = await this.paymentRepository.find({
@@ -393,7 +413,7 @@ export class PaymentService {
           created_at: formatDateTime(payment.created_at),
         });
       }
-      await this.redis.set(cachekey, data, PAYMENTS_TTL);
+      await this.redis.set(cachekey, JSON.stringify(data), 'EX', PAYMENTS_TTL);
       response.code = HttpStatus.OK;
       response.data = { code: 0, data: data };
     } catch (error) {
@@ -431,7 +451,7 @@ export class PaymentService {
       }
 
       const version = Number(
-        (await this.redis.get<number>(summaryVersionKey(dto.branch))) ?? 0,
+        (await this.redis.get(summaryVersionKey(dto.branch))) ?? 0,
       );
       const cachekey = totalTransactionsKey(
         dto.from,
@@ -440,11 +460,15 @@ export class PaymentService {
         version,
       );
 
-      const cacheData = await this.redis.get<ITotalReceivedPayments>(cachekey);
-      if (cacheData) {
-        response.data = { code: 0, data: cacheData };
-        response.code = HttpStatus.OK;
-        return;
+      const cached = await this.redis.get(cachekey);
+      if (cached) {
+        try {
+          response.data = { code: 0, data: JSON.parse(cached) };
+          response.code = HttpStatus.OK;
+          return;
+        } catch {
+          await this.redis.del(cachekey);
+        }
       }
 
       const qb = this.paymentRepository
@@ -479,7 +503,7 @@ export class PaymentService {
       const isOngoingRange = dto.to >= today;
       const ttl = isOngoingRange ? 60 : PAYMENTS_TTL; // 1 min vs your normal TTL
 
-      await this.redis.set(cachekey, data, ttl);
+      await this.redis.set(cachekey, JSON.stringify(data), 'EX', PAYMENTS_TTL);
       response.data = { code: 0, data };
       response.code = HttpStatus.OK;
     } catch (error) {
@@ -508,9 +532,89 @@ export class PaymentService {
         /* same query as getPayments */
       });
       // ...build data array...
-      await this.redis.set(paymentsKey(), payments, PAYMENTS_TTL);
+      await this.redis.set(
+        paymentsKey(),
+        JSON.stringify(payments),
+        'EX',
+        PAYMENTS_TTL,
+      );
     } catch (error) {
       console.error('Error refreshing payments cache via cron:', error);
+    }
+  }
+
+  private async invalidate(build: (p: ChainableCommander) => void) {
+    try {
+      const pipeline = this.redis.pipeline();
+      build(pipeline);
+      const results = await pipeline.exec();
+      results?.forEach(([err], i) => {
+        if (err) console.error(`Redis pipeline cmd ${i} failed:`, err);
+      });
+    } catch (error) {
+      console.error('Redis invalidation failed:', error);
+    }
+  }
+
+  async getMonthlyReceivedByBranch(
+    dto: GetAnnualSummaryDto,
+    req: ICustomRequest,
+    res: Response,
+  ) {
+    const response: IResponse = { code: HttpStatus.ACCEPTED, data: null };
+
+    try {
+      const { id } = extractUser(req);
+      if (!id) {
+        response.data = { code: ErrorCode.MISSING_ID };
+        response.code = HttpStatus.BAD_REQUEST;
+        return;
+      }
+
+      const { year, startDate, endDate } = getYearDateRangeb(dto.year);
+      // current year → stop at the current month; past years → all 12
+      const lastMonth = Number(endDate.slice(5, 7));
+
+      const raw = await this.paymentRepository
+        .createQueryBuilder('payment')
+        .innerJoin('payment.appointment', 'appointment')
+        .where('payment.date_paid BETWEEN :startDate AND :endDate', {
+          startDate,
+          endDate,
+        })
+        .select('EXTRACT(MONTH FROM payment.date_paid)', 'month')
+        .addSelect('appointment.branch', 'branch')
+        .addSelect('SUM(payment.amount_paid)', 'total')
+        .groupBy('EXTRACT(MONTH FROM payment.date_paid)')
+        .addGroupBy('appointment.branch')
+        .getRawMany();
+
+      const branches = Object.values(EBranch);
+      const rows = Array.from({ length: lastMonth }, (_, i) => {
+        const row = { month: MONTH_LABELS[i] } as TMonthlyBranchRow;
+        for (const b of branches) row[b] = 0;
+        return row;
+      });
+
+      for (const r of raw) {
+        const row = rows[Number(r.month) - 1];
+        if (row) row[r.branch as EBranch] = Number(r.total) || 0;
+      }
+
+      const grand_total = rows.reduce(
+        (sum, row) => sum + branches.reduce((s, b) => s + row[b], 0),
+        0,
+      );
+
+      const data: IMonthlyBranchRevenue = { year, rows, grand_total };
+      response.data = { code: 0, data };
+      response.code = HttpStatus.OK;
+    } catch (error) {
+      console.error('Error building monthly revenue by branch:', error);
+      response.data = { code: ErrorCode.INTERNAL_SERVER_ERROR };
+      response.code = HttpStatus.INTERNAL_SERVER_ERROR;
+    } finally {
+      expressResponse(res, response);
     }
   }
 }

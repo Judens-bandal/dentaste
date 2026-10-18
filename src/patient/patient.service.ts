@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { Patient } from './entity/patient';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -20,26 +20,65 @@ import {
   GetPatientDto,
   UpdatePatientDto,
 } from './dto/patient';
-import { patientKey, patientRecordKey, patientsKey } from '../redis/redis.keys';
+import {
+  appointmentsKey,
+  intraoralExamsKey,
+  patientKey,
+  patientRecordKey,
+  patientsKey,
+  paymentsKey,
+} from '../redis/redis.keys';
 import { RedisCacheService } from '../redis/redis-cach.service';
 import {
   EAdminNotification,
   EDoctorNotification,
   NotificationHelper,
 } from '../notification/common/notification.helper';
-import { PATIENT_TTL } from '../redis/redis.ttl';
-import { DeleteAppointmentDto } from '../appointment/dto/appointment';
+import { PATIENT_TTL, PAYMENTS_TTL } from '../redis/redis.ttl';
+import { REDIS_CLIENT } from '../redis/redis-con.module';
 import { EPatientStatus } from './enum/enum';
+import Redis from 'ioredis';
 
 @Injectable()
 export class PatientService {
   constructor(
     @InjectRepository(Patient, 'main_repo')
     private readonly patientRepository: Repository<Patient>,
-    private readonly redis: RedisCacheService,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
     private readonly notificationHelper: NotificationHelper,
   ) {}
 
+  async getTotalPatients(req: ICustomRequest, res: Response) {
+    const response: IResponse = { code: HttpStatus.ACCEPTED, data: null };
+
+    try {
+      // const { id } = extractUser(req);
+      // if (!id) {
+      //   response.data = { code: ErrorCode.MISSING_ID };
+      //   response.code = HttpStatus.BAD_REQUEST;
+      //   return;
+      // }
+      const cachekey = patientsKey();
+      const cached = await this.readCache<IPatient[]>(cachekey);
+      if (cached) {
+        response.data = { code: 0, data: cached.length };
+        response.code = HttpStatus.OK;
+        return;
+      }
+      const total = await this.patientRepository.count();
+      await this.writeCache(cachekey, total, PATIENT_TTL);
+      response.data = { code: 0, data: total };
+      response.code = HttpStatus.OK;
+    } catch (error) {
+      response.data = {
+        code: ErrorCode.INTERNAL_SERVER_ERROR,
+        message: error.message,
+      };
+      response.code = HttpStatus.INTERNAL_SERVER_ERROR;
+    } finally {
+      expressResponse(res, response);
+    }
+  }
   async getAllPatients(dto: GetPatientDto, req: ICustomRequest, res: Response) {
     const response: IResponse = { code: HttpStatus.ACCEPTED, data: null };
 
@@ -51,9 +90,9 @@ export class PatientService {
         return;
       }
       const cachekey = patientsKey();
-      const cacheData = await this.redis.get<IPatient[]>(cachekey);
-      if (cacheData) {
-        response.data = { code: 0, data: cacheData };
+      const cached = await this.readCache<IPatient[]>(cachekey);
+      if (cached) {
+        response.data = { code: 0, data: cached };
         response.code = HttpStatus.OK;
         return;
       }
@@ -207,7 +246,7 @@ export class PatientService {
           : { service: null, service_type: null, services: [] }),
       }));
 
-      await this.redis.set(cachekey, patientsWithServices, PATIENT_TTL);
+      await this.writeCache(patientsKey(), patientsWithServices, PATIENT_TTL);
 
       response.data = { code: 0, data: patientsWithServices };
       response.code = HttpStatus.OK;
@@ -236,12 +275,12 @@ export class PatientService {
       }
 
       // const cachekey = patientRecordKey(dto.id);
-      // const cacheData = await this.redis.get<IPatientRecord[]>(cachekey);
-      // if (cacheData) {
-      //   response.data = { code: 0, data: cacheData };
-      //   response.code = HttpStatus.OK;
-      //   return;
-      // }
+      const cached = await this.readCache<unknown[]>(patientRecordKey(dto.id));
+      if (cached) {
+        response.data = { code: 0, data: cached };
+        response.code = HttpStatus.OK;
+        return;
+      }
       const query = `
         SELECT
           p.last_name,
@@ -382,7 +421,7 @@ export class PatientService {
           : null,
       }));
 
-      // await this.redis.set(cachekey, data);
+      await this.writeCache(patientRecordKey(dto.id), data, PATIENT_TTL);
 
       response.data = { code: 0, data };
       response.code = HttpStatus.OK;
@@ -479,7 +518,7 @@ export class PatientService {
       });
 
       await this.patientRepository.save(patient);
-      await this.redis.del(patientsKey());
+      await this.invalidate();
       void this.notificationHelper.notifyDoctor(
         id,
         EDoctorNotification.PATIENT_CREATED,
@@ -601,8 +640,8 @@ export class PatientService {
       };
 
       await this.patientRepository.update({ id: dto.id }, patient);
-      await this.redis.del(patientKey(id));
-      await this.redis.del(patientsKey());
+      await this.invalidate(dto.id);
+
       void this.notificationHelper.notifyDoctor(
         id,
         EDoctorNotification.PATIENT_UPDATED,
@@ -650,8 +689,7 @@ export class PatientService {
       }
 
       await this.patientRepository.delete({ id: dto.id });
-      await this.redis.del(patientKey(id));
-      await this.redis.del(patientsKey());
+      await this.invalidate(dto.id, true);
 
       // in PatientService.addPatient(), after saving
       void this.notificationHelper.notifyDoctor(
@@ -668,6 +706,44 @@ export class PatientService {
       response.code = HttpStatus.INTERNAL_SERVER_ERROR;
     } finally {
       expressResponse(res, response);
+    }
+  }
+
+  private async readCache<T>(key: string): Promise<T | null> {
+    try {
+      const raw = await this.redis.get(key);
+      return raw ? (JSON.parse(raw) as T) : null;
+    } catch (error) {
+      console.error(`Cache read failed (${key}):`, error);
+      return null; // fall through to DB
+    }
+  }
+
+  private async writeCache(key: string, value: unknown, ttl: number) {
+    try {
+      await this.redis.set(key, JSON.stringify(value), 'EX', ttl);
+    } catch (error) {
+      console.error(`Cache write failed (${key}):`, error);
+    }
+  }
+
+  private async invalidate(patientId?: string, includeExams = false) {
+    try {
+      const p = this.redis.pipeline();
+      p.del(patientsKey());
+      p.del(appointmentsKey()); // embeds patient name/phone/address/age
+      p.del(paymentsKey()); // embeds patient name/phone/address
+      if (patientId) {
+        p.del(patientKey(patientId));
+        p.del(patientRecordKey(patientId));
+        if (includeExams) p.del(intraoralExamsKey(patientId));
+      }
+      const results = await p.exec();
+      results?.forEach(([err], i) => {
+        if (err) console.error(`Redis invalidate cmd ${i} failed:`, err);
+      });
+    } catch (error) {
+      console.error('Redis invalidation failed:', error);
     }
   }
 }

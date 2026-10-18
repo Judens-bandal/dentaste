@@ -14,6 +14,7 @@ import { JwtAuthGuard } from '../../common/commons/guards/jwt-auth.guard';
 import { extractUser } from '../../utils/common.helper';
 import { ICustomRequest } from '../../utils/common.interface';
 import { ErrorCode } from '../../utils/common.enum';
+import { SkipMaintenance } from '../systemmaintenance/common/decorators/skip-maintenance.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -23,13 +24,13 @@ export class AuthController {
   async refreshToken(@Body('userId') userId: string) {
     return this.authService.refreshToken(userId);
   }
-
+  @SkipMaintenance()
   @Post('/register')
   @Public()
   register(@Body() authCredentialsDto: CreateUserDto): Promise<void> {
     return this.authService.register(authCredentialsDto);
   }
-
+  @SkipMaintenance()
   @Public()
   @Post('/login')
   login(

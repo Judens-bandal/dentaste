@@ -20,12 +20,19 @@ import type { ICustomRequest } from '../../utils/common.interface';
 import { Permission } from '../../common/commons/decorator/permissions.decorator';
 import { EPermissions, ERole } from '../../utils/common.enum';
 import { Roles } from '../../common/commons/decorator/roles.decorator';
+import { Public } from '../../common/commons/decorator/jwt.decorator';
 
 @ApiBearerAuth()
 @Controller('intraoral-exams')
 export class IntraoralExamController {
   constructor(private readonly intraoralExamService: IntraoralExamService) {}
-
+  @Get('total')
+  // @Roles(ERole.DOCTOR, ERole.ASSISTANT)
+  // @Permission(EPermissions.VIEW_PATIENTS)
+  @Public()
+  async getTotal(@Req() req: ICustomRequest, @Res() res: Response) {
+    await this.intraoralExamService.getTotal(req, res);
+  }
   @Get()
   @Roles(ERole.DOCTOR, ERole.ASSISTANT)
   @Permission(EPermissions.VIEW_PATIENTS)

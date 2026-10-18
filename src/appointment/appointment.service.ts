@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { Appointment } from './entity/appointment';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -13,6 +13,7 @@ import {
   expressResponse,
   extractUser,
   formatDateTime,
+  safeParser,
   toManilaUTC,
 } from '../../utils/common.helper';
 import {
@@ -45,6 +46,8 @@ import {
   appointmentsKey,
   patientRecordKey,
   patientsKey,
+  paymentsKey,
+  summaryVersionKey,
 } from '../redis/redis.keys';
 import { Patient } from '../patient/entity/patient';
 import { ILock, RedisLock } from '../redis/redis.lock';
@@ -53,6 +56,8 @@ import {
   getPaymentStatus,
 } from './helper/appointment.helper';
 import { APPOINTMENT_TTL } from '../redis/redis.ttl';
+import Redis from 'ioredis';
+import { REDIS_CLIENT } from '../redis/redis-con.module';
 
 @Injectable()
 export class AppointmentService {
@@ -62,7 +67,10 @@ export class AppointmentService {
 
     @InjectRepository(Patient, 'main_repo')
     private readonly patientRepository: Repository<Patient>,
-    private readonly redis: RedisCacheService,
+    // private readonly redis: RedisCacheService,
+
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
+
     private readonly redisLock: RedisLock,
     private readonly notificationHelper: NotificationHelper,
   ) {}
@@ -81,35 +89,44 @@ export class AppointmentService {
         response.code = HttpStatus.BAD_REQUEST;
         return;
       }
-
       const cachekey = appointmentsKey();
-      const cacheData = await this.redis.get<IAppointments[]>(cachekey);
-      if (cacheData) {
-        const data = cacheData.map((appointment) => {
-          const legacyAppointment = appointment as IAppointments & {
-            amount_charger?: number;
-          };
-          const parsedCharge = Number(
-            legacyAppointment.amount_charge ??
-              legacyAppointment.amount_charger ??
-              0,
-          );
-          const amount_charge = Number.isFinite(parsedCharge)
-            ? parsedCharge
-            : 0;
-          const balance = Number(appointment.balance);
+      const cached = await this.redis.get(cachekey);
 
-          return {
-            ...legacyAppointment,
-            amount_charge,
-            balance,
-            payment_status: getPaymentStatus(amount_charge, balance),
-          };
-        });
+      if (cached) {
+        let cacheData: IAppointments[] | null = null;
+        try {
+          cacheData = JSON.parse(cached) as IAppointments[];
+        } catch {
+          await this.redis.del(cachekey);
+        }
 
-        response.code = HttpStatus.OK;
-        response.data = { code: 0, data };
-        return;
+        if (Array.isArray(cacheData)) {
+          const data = cacheData.map((appointment) => {
+            const legacyAppointment = appointment as IAppointments & {
+              amount_charger?: number;
+            };
+            const parsedCharge = Number(
+              legacyAppointment.amount_charge ??
+                legacyAppointment.amount_charger ??
+                0,
+            );
+            const amount_charge = Number.isFinite(parsedCharge)
+              ? parsedCharge
+              : 0;
+            const balance = Number(appointment.balance);
+
+            return {
+              ...legacyAppointment,
+              amount_charge,
+              balance,
+              payment_status: getPaymentStatus(amount_charge, balance),
+            };
+          });
+
+          response.code = HttpStatus.OK;
+          response.data = { code: 0, data };
+          return;
+        }
       }
 
       const appointments = await this.appointmentRepository.find({
@@ -181,7 +198,12 @@ export class AppointmentService {
         });
       }
 
-      await this.redis.set(cachekey, data, APPOINTMENT_TTL);
+      await this.redis.set(
+        cachekey,
+        JSON.stringify(data),
+        'EX',
+        APPOINTMENT_TTL,
+      );
       response.code = HttpStatus.OK;
       response.data = { code: 0, data };
     } catch (error) {
@@ -210,21 +232,18 @@ export class AppointmentService {
   ) {
     const response: IResponse = { code: HttpStatus.ACCEPTED, data: null };
 
-    // lock scoped to the BRANCH only (not branch+exact-time) — this matches
-    // assertNoScheduleConflict's +/- 30 minute buffer window. A lock keyed to
-    // the exact timestamp would let two requests 15 minutes apart both pass
-    // the conflict check in parallel, since they'd acquire different lock
-    // keys despite being a real conflict under the buffer rule.
     const lockResource = this.redisLock.generateLock(
       'appointment-slot',
       'global',
     );
-    // const lock = await this.redisLock.singleLock(lockResource, 5000);
-    const lock: ILock | undefined = await this.redisLock.singleLock(
-      lockResource,
-      5000,
-    );
 
+    let lock: ILock | undefined;
+
+    try {
+      lock = await this.redisLock.singleLock(lockResource, 5000);
+    } catch (error) {
+      console.error('Lock acquire failed:', error);
+    }
     if (!lock) {
       // distinct from ErrorCode.SCHEDULE_CONFLICT — this means "someone else
       // is mid-booking at this branch right now, retry shortly", not "this
@@ -291,10 +310,11 @@ export class AppointmentService {
       });
 
       const saved = await this.appointmentRepository.save(appointment);
-
-      await this.redis.del(appointmentsKey());
-      await this.redis.del(patientRecordKey(dto.patient_id));
-      await this.redis.del(patientsKey());
+      await this.invalidate({
+        patient_id: dto.patient_id,
+        branches: [dto.branch],
+        money: true,
+      });
 
       const patient = await this.patientRepository.findOne({
         where: { id: dto.patient_id },
@@ -336,7 +356,11 @@ export class AppointmentService {
         response.code = HttpStatus.INTERNAL_SERVER_ERROR;
       }
     } finally {
-      await this.redisLock.releaseLock(lock);
+      try {
+        await this.redisLock.releaseLock(lock);
+      } catch (error) {
+        console.error('Lock release failed:', error);
+      }
       expressResponse(res, response);
     }
   }
@@ -408,17 +432,19 @@ export class AppointmentService {
         'appointment-slot',
         'global',
       );
-      const lock: ILock | undefined = await this.redisLock.singleLock(
-        lockResource,
-        5000,
-      );
+
+      let lock: ILock | undefined;
+
+      try {
+        lock = await this.redisLock.singleLock(lockResource, 5000);
+      } catch (error) {
+        console.error('Lock acquire failed:', error);
+      }
 
       if (!lock) {
-        // distinct from SCHEDULE_CONFLICT — this means "someone else is
-        // mid-booking/rescheduling at this branch right now", not "this
-        // slot is confirmed already taken" (that's the DB-level check below)
         response.data = { code: ErrorCode.LOCK_BUSY };
         response.code = HttpStatus.CONFLICT;
+        expressResponse(res, response);
         return;
       }
 
@@ -476,10 +502,15 @@ export class AppointmentService {
         };
 
         await this.appointmentRepository.update({ id: dto.id }, appointment);
-        await this.redis.del(appointmentKey(dto.id));
-        await this.redis.del(appointmentsKey());
-        await this.redis.del(patientsKey());
-
+        // await this.redis.del(appointmentKey(dto.id));
+        // await this.redis.del(appointmentsKey());
+        // await this.redis.del(patientsKey());
+        await this.invalidate({
+          id: dto.id,
+          patient_id: existing.patient_id,
+          branches: [existing.branch, newBranch],
+          money: true,
+        });
         const patient = existing.patient_id
           ? await this.patientRepository.findOne({
               where: { id: existing.patient_id },
@@ -516,7 +547,11 @@ export class AppointmentService {
         };
         response.code = HttpStatus.OK;
       } finally {
-        await this.redisLock.releaseLock(lock);
+        try {
+          await this.redisLock.releaseLock(lock);
+        } catch (error) {
+          console.error('Lock release failed:', error);
+        }
       }
     } catch (error) {
       if (error instanceof HttpException) {
@@ -571,9 +606,12 @@ export class AppointmentService {
           })
         : null;
       await this.appointmentRepository.delete({ id: dto.id });
-      await this.redis.del(appointmentKey(dto.id));
-      await this.redis.del(appointmentsKey());
-      await this.redis.del(patientsKey());
+      await this.invalidate({
+        id: dto.id,
+        patient_id: appointment.patient_id,
+        branches: [appointment.branch],
+        money: true,
+      });
 
       void this.notificationHelper.notifyDoctors(
         EDoctorAppointmentNotification.APPOINTMENT_DELETED,
@@ -631,8 +669,10 @@ export class AppointmentService {
         { appointment_status: dto.appointment_status },
       );
 
-      await this.redis.del(appointmentKey(dto.id));
-      await this.redis.del(appointmentsKey());
+      await this.invalidate({
+        id: dto.id,
+        patient_id: existing.patient_id,
+      });
 
       const patient = existing.patient_id
         ? await this.patientRepository.findOne({
@@ -671,6 +711,32 @@ export class AppointmentService {
       response.code = HttpStatus.INTERNAL_SERVER_ERROR;
     } finally {
       expressResponse(res, response);
+    }
+  }
+
+  private async invalidate(a: {
+    id?: Appointment['id'];
+    patient_id?: Appointment['patient_id'] | null;
+    branches?: Appointment['branch'][];
+    money?: boolean;
+  }) {
+    try {
+      const p = this.redis.pipeline();
+      p.del(appointmentsKey());
+      p.del(patientsKey());
+      if (a.id) p.del(appointmentKey(a.id));
+      if (a.patient_id) p.del(patientRecordKey(a.patient_id));
+      if (a.money) {
+        p.del(paymentsKey());
+        for (const b of new Set(a.branches ?? [])) p.incr(summaryVersionKey(b));
+        p.incr(summaryVersionKey());
+      }
+      const results = await p.exec();
+      results?.forEach(([err], i) => {
+        if (err) console.error(`Redis invalidate cmd ${i} failed:`, err);
+      });
+    } catch (error) {
+      console.error('Redis invalidation failed:', error);
     }
   }
 }

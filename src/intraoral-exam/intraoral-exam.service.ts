@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Response } from 'express';
@@ -11,6 +11,7 @@ import {
   expressResponse,
   extractUser,
   formatDateTime,
+  safeParser,
 } from '../../utils/common.helper';
 import {
   CreateIntraoralExamDto,
@@ -23,23 +24,57 @@ import {
   patientRecordKey,
   patientsKey,
 } from '../redis/redis.keys';
-import { RedisCacheService } from '../redis/redis-cach.service';
 import {
   EDoctorNotification,
   NotificationHelper,
 } from '../notification/common/notification.helper';
 import { PATIENT_TTL } from '../redis/redis.ttl';
+import Redis from 'ioredis';
+import { REDIS_CLIENT } from '../redis/redis-con.module';
 
 @Injectable()
 export class IntraoralExamService {
   constructor(
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
     @InjectRepository(IntraoralExam, 'main_repo')
     private readonly intraoralExamRepository: Repository<IntraoralExam>,
     @InjectRepository(Appointment, 'main_repo')
     private readonly appointmentRepository: Repository<Appointment>,
-    private readonly redis: RedisCacheService,
+    // private readonly redis: RedisCacheService,
     private readonly notificationHelper: NotificationHelper,
   ) {}
+
+  async getTotal(req: ICustomRequest, res: Response) {
+    const response: IResponse = { code: HttpStatus.ACCEPTED, data: null };
+
+    try {
+      // const { id } = extractUser(req);
+      // if (!id) {
+      //   response.data = { code: ErrorCode.MISSING_ID };
+      //   response.code = HttpStatus.BAD_REQUEST;
+      //   return;
+      // }
+      // const cachekey = patientsKey();
+      // const cached = await this.readCache<IPatient[]>(cachekey);
+      // if (cached) {
+      //   response.data = { code: 0, data: cached.length };
+      //   response.code = HttpStatus.OK;
+      //   return;
+      // }
+      const total = await this.intraoralExamRepository.count();
+      // await this.writeCache(cachekey, total, PATIENT_TTL);
+      response.data = { code: 0, data: total };
+      response.code = HttpStatus.OK;
+    } catch (error) {
+      response.data = {
+        code: ErrorCode.INTERNAL_SERVER_ERROR,
+        message: error.message,
+      };
+      response.code = HttpStatus.INTERNAL_SERVER_ERROR;
+    } finally {
+      expressResponse(res, response);
+    }
+  }
 
   async getExams(dto: GetIntraoralExamDto, req: ICustomRequest, res: Response) {
     const response: IResponse = { code: HttpStatus.ACCEPTED, data: null };
@@ -53,9 +88,9 @@ export class IntraoralExamService {
       }
 
       const cachekey = intraoralExamsKey(dto.patient_id);
-      const cacheData = await this.redis.get<IntraoralExam[]>(cachekey);
+      const cacheData = await this.redis.get(cachekey);
       if (cacheData) {
-        response.data = { code: 0, data: cacheData };
+        response.data = { code: 0, data: safeParser(cacheData) };
         response.code = HttpStatus.OK;
         return;
       }
@@ -64,7 +99,7 @@ export class IntraoralExamService {
         where: { patient_id: dto.patient_id },
         order: { created_at: 'DESC' },
       });
-      await this.redis.set(cachekey, exams, PATIENT_TTL);
+      await this.redis.set(cachekey, JSON.stringify(exams), 'EX', PATIENT_TTL);
 
       response.data = { code: 0, data: exams };
       response.code = HttpStatus.OK;
@@ -108,25 +143,21 @@ export class IntraoralExamService {
         additional_service: dto.additional_service ?? null,
         additional_charge: dto.additional_charge ?? null,
       });
+
       await this.intraoralExamRepository.save(exam);
-
-      if (dto.appointment_id) {
-        await this.recalcAppointmentCharge(dto.appointment_id);
+      try {
+        if (dto.appointment_id) {
+          await this.recalcAppointmentCharge(dto.appointment_id);
+        }
+      } finally {
+        await this.invalidate(dto.patient_id, dto.appointment_id);
       }
 
-      await this.redis.del(intraoralExamsKey(dto.patient_id));
-      await this.redis.del(patientRecordKey(dto.patient_id));
-      await this.redis.del(patientsKey());
-      if (dto.appointment_id) {
-        await this.redis.del(appointmentKey(dto.appointment_id));
-        await this.redis.del(appointmentsKey());
-      }
-
-      void this.notificationHelper.notifyDoctor(
-        id,
-        EDoctorNotification.INTRAORAL_EXAM_CREATED,
-        'An intraoral exam was recorded.',
-      );
+      // void this.notificationHelper.notifyDoctor(
+      //   id,
+      //   EDoctorNotification.INTRAORAL_EXAM_CREATED,
+      //   'An intraoral exam was recorded.',
+      // );
 
       response.data = { code: 0, data: exam };
       response.code = HttpStatus.CREATED;
@@ -160,15 +191,14 @@ export class IntraoralExamService {
       }
 
       await this.intraoralExamRepository.delete({ id });
-      if (exam.patient_id) {
-        await this.redis.del(intraoralExamsKey(exam.patient_id));
-        await this.redis.del(patientRecordKey(exam.patient_id));
-      }
 
-      if (exam.appointment_id) {
-        await this.recalcAppointmentCharge(exam.appointment_id);
-        await this.redis.del(appointmentKey(exam.appointment_id));
-        await this.redis.del(appointmentsKey());
+      await this.intraoralExamRepository.delete({ id });
+      try {
+        if (exam.appointment_id) {
+          await this.recalcAppointmentCharge(exam.appointment_id);
+        }
+      } finally {
+        await this.invalidate(exam.patient_id, exam.appointment_id);
       }
 
       response.data = { code: 0 };
@@ -224,5 +254,29 @@ export class IntraoralExamService {
        WHERE a.id = totals.id`,
       [appointmentId],
     );
+  }
+
+  private async invalidate(
+    patientId?: string | null,
+    appointmentId?: string | null,
+  ) {
+    try {
+      const p = this.redis.pipeline();
+      p.del(patientsKey());
+      if (patientId) {
+        p.del(intraoralExamsKey(patientId));
+        p.del(patientRecordKey(patientId));
+      }
+      if (appointmentId) {
+        p.del(appointmentKey(appointmentId));
+        p.del(appointmentsKey());
+      }
+      const results = await p.exec();
+      results?.forEach(([err], i) => {
+        if (err) console.error(`Redis invalidate cmd ${i} failed:`, err);
+      });
+    } catch (error) {
+      console.error('Redis invalidation failed:', error);
+    }
   }
 }

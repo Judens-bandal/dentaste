@@ -11,6 +11,7 @@ import {
 import { PaymentService } from './payment.service';
 import {
   CreatePaymentDto,
+  GetAnnualSummaryDto,
   GetPaymentDto,
   GetTotalPaymentsDto,
 } from './dto/payment';
@@ -21,11 +22,20 @@ import { Permission } from '../../common/commons/decorator/permissions.decorator
 import { EPermissions, ERole } from '../../utils/common.enum';
 import { Cron } from '@nestjs/schedule';
 import { Roles } from '../../common/commons/decorator/roles.decorator';
+import { Public } from '../../common/commons/decorator/jwt.decorator';
+import { SkipMaintenance } from '../systemmaintenance/common/decorators/skip-maintenance.decorator';
 
 @Controller('payments')
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
 
+  @Get('/total')
+  // @Roles(ERole.DOCTOR)
+  @SkipMaintenance()
+  @Public()
+  async getTotalPayments(@Req() req: ICustomRequest, @Res() res: Response) {
+    return await this.paymentService.getTotalPayments(req, res);
+  }
   @Post('/add')
   @Roles(ERole.DOCTOR, ERole.ASSISTANT)
   @Permission(EPermissions.MANAGE_PAYMENTS)
@@ -73,5 +83,14 @@ export class PaymentController {
   async refreshPaymentsCacheJob() {
     // calls the DEDICATED cache-refresh method — NOT getPayments()
     await this.paymentService.refreshPaymentsCache();
+  }
+
+  @Get('chart/by-branch')
+  getMonthlyByBranch(
+    @Query() dto: GetAnnualSummaryDto,
+    @Req() req: ICustomRequest,
+    @Res() res: Response,
+  ) {
+    return this.paymentService.getMonthlyReceivedByBranch(dto, req, res);
   }
 }

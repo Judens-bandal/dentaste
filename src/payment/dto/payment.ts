@@ -63,29 +63,45 @@ export class UpdatePaymentDto {
 
 // payments/dto/get-total-payments.dto.ts
 export class GetTotalPaymentsDto {
-  // @Optional()
-  // @IsUUID()
-  // id?: string;
-
   @IsCustomDate()
   from: string;
 
   @IsCustomDate()
   to: string;
 
-  // used by getTotalReceivedPayments / getFullyPaidAppointmentsTotal to
-  // filter to one branch; IGNORED by getTotalReceivedByBranch, which
-  // always returns every branch broken down individually
   @IsOptional()
   @IsEnum(EBranch)
   branch?: EBranch;
 }
 
 export class GetAnnualSummaryDto {
-  @IsUUID()
-  id: string;
+  // @IsUUID()
+  // id: string;
 
   @IsOptional()
   @IsString()
   year: string;
 }
+
+export type TMonthlyBranchRow = { month: string } & Record<EBranch, number>;
+
+export interface IMonthlyBranchRevenue {
+  year: string;
+  rows: TMonthlyBranchRow[];
+  grand_total: number;
+}
+
+export const MONTH_LABELS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];

@@ -481,3 +481,26 @@ export const extractYear = (input: string | Date): number => {
   }
   return input.getUTCFullYear();
 };
+
+export interface IYearDateRangeb {
+  year: string;
+  isCurrentYear: EStatus; // ACTIVE (0) = current year, still in progress; INIYearDateRangeACTIVE (1) = past or future year
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD, capped at today for the current year
+}
+
+export function getYearDateRangeb(year?: string): IYearDateRangeb {
+  const manilaNow = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  const currentYear = String(manilaNow.getUTCFullYear());
+  const resolvedYear = year ?? currentYear;
+  const isCurrent = resolvedYear === currentYear;
+
+  return {
+    year: resolvedYear,
+    isCurrentYear: isCurrent ? EStatus.ACTIVE : EStatus.INACTIVE,
+    startDate: `${resolvedYear}-01-01`,
+    endDate: isCurrent
+      ? manilaNow.toISOString().slice(0, 10)
+      : `${resolvedYear}-12-31`,
+  };
+}

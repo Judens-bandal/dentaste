@@ -23,11 +23,22 @@ import { EPermissions, ERole } from '../../utils/common.enum';
 import { Roles } from '../../common/commons/decorator/roles.decorator';
 import { DeleteAppointmentDto } from '../appointment/dto/appointment';
 import { ApiBearerAuth } from '@nestjs/swagger';
+import { Public } from '../../common/commons/decorator/jwt.decorator';
+import { SkipMaintenance } from '../systemmaintenance/common/decorators/skip-maintenance.decorator';
 @ApiBearerAuth()
 @Controller('patients')
 export class PatientController {
   constructor(private readonly patientService: PatientService) {}
 
+  @Public()
+  @Get('/total')
+  @SkipMaintenance()
+
+  // @Roles(ERole.DOCTOR, ERole.ASSISTANT)
+  // @Permission(EPermissions.VIEW_PATIENTS)
+  async getTotalPatients(@Req() req: ICustomRequest, @Res() res: Response) {
+    await this.patientService.getTotalPatients(req, res);
+  }
   @Get()
   @Roles(ERole.DOCTOR, ERole.ASSISTANT)
   @Permission(EPermissions.VIEW_PATIENTS)
