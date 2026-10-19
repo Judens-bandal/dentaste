@@ -25,11 +25,19 @@ import { Permission } from '../../common/commons/decorator/permissions.decorator
 import { EPermissions, ERole } from '../../utils/common.enum';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { Roles } from '../../common/commons/decorator/roles.decorator';
+import { Public } from '../../common/commons/decorator/jwt.decorator';
 
 @ApiBearerAuth()
 @Controller('appointments')
 export class AppointmentController {
   constructor(private appointmentService: AppointmentService) {}
+
+  // @Public()
+  @Get('/sched')
+  @Roles(ERole.DOCTOR, ERole.ASSISTANT)
+  async getTotalSched(@Req() req: ICustomRequest, @Res() res: Response) {
+    return await this.appointmentService.getTotalSched(req, res);
+  }
 
   @Get()
   @Roles(ERole.DOCTOR, ERole.ASSISTANT)

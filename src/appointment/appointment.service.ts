@@ -75,6 +75,56 @@ export class AppointmentService {
     private readonly notificationHelper: NotificationHelper,
   ) {}
 
+  async getTotalSched(req: ICustomRequest, res: Response) {
+    const response: IResponse = { code: HttpStatus.ACCEPTED, data: null };
+
+    try {
+      const { id } = extractUser(req);
+      if (!id) {
+        response.data = { code: ErrorCode.MISSING_ID };
+        response.code = HttpStatus.BAD_REQUEST;
+        return;
+      }
+      // const cachekey = patientsKey();
+      // const cached = await this.readCache<IPatient[]>(cachekey);
+      // if (cached) {
+      //   response.data = { code: 0, data: cached.length };
+      //   response.code = HttpStatus.OK;
+      //   return;
+      // }
+      const rows = await this.appointmentRepository
+        .createQueryBuilder('appointment')
+        .select('appointment.branch', 'branch')
+        .addSelect('COUNT(appointment.id)', 'count')
+        .where('appointment.appointment_status = :status', {
+          status: EAppointmentStatus.SCHEDULED,
+        })
+        .groupBy('appointment.branch')
+        .getRawMany<{ branch: string; count: string }>();
+
+      const by_branch = rows.map((row) => ({
+        branch: row.branch,
+        count: Number(row.count),
+      }));
+
+      const data = {
+        total: by_branch.reduce((sum, row) => sum + row.count, 0),
+        by_branch,
+      };
+      // await this.writeCache(cachekey, total, PATIENT_TTL);
+      response.data = { code: 0, data: data };
+      response.code = HttpStatus.OK;
+    } catch (error) {
+      response.data = {
+        code: ErrorCode.INTERNAL_SERVER_ERROR,
+        // message: error.message,
+      };
+      response.code = HttpStatus.INTERNAL_SERVER_ERROR;
+    } finally {
+      expressResponse(res, response);
+    }
+  }
+
   async getAllAppointments(
     dto: GetAppointmentDto,
     req: ICustomRequest,

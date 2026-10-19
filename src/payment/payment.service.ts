@@ -1,7 +1,7 @@
 // payments/payment.service.ts
 import { HttpException, HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, MoreThan, Repository } from 'typeorm';
 import { Response } from 'express';
 import { Payment } from './entity/payment';
 import { Appointment } from '../appointment/entity/appointment';
@@ -50,8 +50,12 @@ import {
   MONTH_LABELS,
   TMonthlyBranchRow,
 } from './dto/payment';
-import { EAppointmentStatus, EBranch } from '../appointment/enum/appointment';
-import { PATIENT_TTL, PAYMENTS_TTL } from '../redis/redis.ttl';
+import {
+  EAppointmentStatus,
+  EBranch,
+  EPaymentStatus,
+} from '../appointment/enum/appointment';
+import { PAYMENTS_TTL } from '../redis/redis.ttl';
 import { ChainableCommander, Redis } from 'ioredis';
 import { REDIS_CLIENT } from '../redis/redis-con.module';
 
@@ -74,7 +78,7 @@ export class PaymentService {
     private readonly notificationHelper: NotificationHelper,
   ) {}
 
-  async getTotalPayments(req: ICustomRequest, res: Response) {
+  async calculateUnPaid(req: ICustomRequest, res: Response) {
     const response: IResponse = { code: HttpStatus.ACCEPTED, data: null };
 
     try {
@@ -91,7 +95,64 @@ export class PaymentService {
       //   response.code = HttpStatus.OK;
       //   return;
       // }
-      const total = await this.paymentRepository.count();
+
+      const row = await this.appointmentRepository
+        .createQueryBuilder('appointment')
+        .select('COUNT(appointment.id)', 'total')
+        .addSelect(
+          'COUNT(appointment.id) FILTER (WHERE appointment.balance > 0)',
+          'unpaid',
+        )
+        .addSelect(
+          'COALESCE(SUM(appointment.balance) FILTER (WHERE appointment.balance > 0), 0)',
+          'unpaid_amount',
+        )
+        .getRawOne<{
+          total: string;
+          unpaid: string;
+          unpaid_amount: string;
+        }>();
+
+      response.data = {
+        code: 0,
+        data: {
+          // total: Number(row?.total ?? 0),
+          unpaid: Number(row?.unpaid ?? 0),
+          unpaid_amount: Number(row?.unpaid_amount ?? 0),
+        },
+      };
+      // await this.writeCache(cachekey, total, PATIENT_TTL);
+      // response.data = { code: 0, data: total };
+      response.code = HttpStatus.OK;
+    } catch (error) {
+      response.data = {
+        code: ErrorCode.INTERNAL_SERVER_ERROR,
+        message: error.message,
+      };
+      response.code = HttpStatus.INTERNAL_SERVER_ERROR;
+    } finally {
+      expressResponse(res, response);
+    }
+  }
+
+  async calculateAmountPaid(req: ICustomRequest, res: Response) {
+    const response: IResponse = { code: HttpStatus.ACCEPTED, data: null };
+
+    try {
+      // const { id } = extractUser(req);
+      // if (!id) {
+      //   response.data = { code: ErrorCode.MISSING_ID };
+      //   response.code = HttpStatus.BAD_REQUEST;
+      //   return;
+      // }
+      // const cachekey = patientsKey();
+      // const cached = await this.readCache<IPatient[]>(cachekey);
+      // if (cached) {
+      //   response.data = { code: 0, data: cached.length };
+      //   response.code = HttpStatus.OK;
+      //   return;
+      // }
+      const total = await this.paymentRepository.sum('amount_paid');
       // await this.writeCache(cachekey, total, PATIENT_TTL);
       response.data = { code: 0, data: total };
       response.code = HttpStatus.OK;

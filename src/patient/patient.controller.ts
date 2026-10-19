@@ -30,12 +30,9 @@ import { SkipMaintenance } from '../systemmaintenance/common/decorators/skip-mai
 export class PatientController {
   constructor(private readonly patientService: PatientService) {}
 
-  @Public()
   @Get('/total')
-  @SkipMaintenance()
-
-  // @Roles(ERole.DOCTOR, ERole.ASSISTANT)
-  // @Permission(EPermissions.VIEW_PATIENTS)
+  @Roles(ERole.DOCTOR, ERole.ASSISTANT)
+  @Permission(EPermissions.VIEW_PATIENTS)
   async getTotalPatients(@Req() req: ICustomRequest, @Res() res: Response) {
     await this.patientService.getTotalPatients(req, res);
   }

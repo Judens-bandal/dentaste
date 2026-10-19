@@ -29,12 +29,16 @@ import { SkipMaintenance } from '../systemmaintenance/common/decorators/skip-mai
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
 
-  @Get('/total')
+  @Get('unpaid')
   // @Roles(ERole.DOCTOR)
-  @SkipMaintenance()
   @Public()
+  async getUnPaid(@Req() req: ICustomRequest, @Res() res: Response) {
+    return await this.paymentService.calculateUnPaid(req, res);
+  }
+  @Get('/total')
+  @Roles(ERole.DOCTOR)
   async getTotalPayments(@Req() req: ICustomRequest, @Res() res: Response) {
-    return await this.paymentService.getTotalPayments(req, res);
+    return await this.paymentService.calculateAmountPaid(req, res);
   }
   @Post('/add')
   @Roles(ERole.DOCTOR, ERole.ASSISTANT)
